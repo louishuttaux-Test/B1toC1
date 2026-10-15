@@ -1,7 +1,7 @@
 # Mon français : parcours B1 → C1
 
 Site d'apprentissage du français, utilisable sur ordinateur et installable comme application sur iPhone.
-30 unités complètes (174 activités), un mémento de 29 règles, une série de jours façon Duolingo,
+30 unités (201 exercices, dont l’unité 1 entièrement enrichie), un mémento de 32 règles, une série de jours façon Duolingo,
 un objectif quotidien et des rappels par notification. La mascotte est Summer, notre chienne. 🐾
 
 ## Fichiers
@@ -11,7 +11,11 @@ un objectif quotidien et des rappels par notification. La mascotte est Summer, n
 | `index.html` | la page |
 | `style.css` | l'apparence (couleurs, animations, version téléphone) |
 | `app.js` | le fonctionnement : comptes, exercices, série, rappels |
-| `contenu.js` | les 30 unités |
+| `contenu.js` | le cadre : thèmes, niveaux, compétences, étapes |
+| `unites/u01.js` … `u30.js` | les 30 unités, une par fichier |
+| `verifier.js` | le contrôle des unités (`node verifier.js`) |
+| `CHARTE.md` | la charte pédagogique et le format des exercices |
+| `REGISTRE.md` | ce qui est déjà utilisé dans chaque unité |
 | `regles.js` | le mémento de règles |
 | `illustrations.js` | les dessins (thèmes et Summer) |
 | `config.js` | les clés Supabase et la clé publique des notifications |
@@ -20,7 +24,7 @@ un objectif quotidien et des rappels par notification. La mascotte est Summer, n
 | `supabase-rappels.sql` | création des rappels (à faire une fois) |
 | `supabase/functions/rappel/index.ts` | la fonction qui envoie les notifications |
 
-Tout se dépose à la racine du dépôt GitHub, dossiers `icones` et `supabase` compris.
+Tout se dépose à la racine du dépôt GitHub, dossiers `icones`, `unites` et `supabase` compris.
 
 ## 1. Mettre à jour le site
 
@@ -64,9 +68,19 @@ notifications, choisis l'heure, puis **Tester une notification**.
 
 Pour vérifier que le réveil tourne : **Edge Functions › rappel › Logs** affiche un appel toutes les 15 minutes.
 
+## 4. Enrichir les unités
+
+Chaque unité contient plusieurs exercices par compétence (lecture, écoute, vocabulaire, grammaire, écriture, oral),
+du plus guidé au plus libre : comprendre l’essentiel, repérer les détails, interpréter, réemployer.
+Le format et les repères sont décrits dans `CHARTE.md` ; `REGISTRE.md` évite les répétitions.
+
+Après toute modification d’une unité : `node verifier.js` (Node.js requis) doit afficher 0 erreur.
+Les exercices d’origine gardent leurs identifiants (`a0`, `a1`…) : ne jamais les renommer, sinon la
+progression enregistrée serait perdue (voir la charte, § 10).
+
 ## Fonctionnement
 
-- **Série** : un jour compte dès qu'une activité est terminée. La série affichée en haut est le nombre de jours consécutifs.
+- **Série** : un jour compte dès qu'un exercice est terminé. La série affichée en haut est le nombre de jours consécutifs.
 - **Objectif du jour** : réglable de 1 à 4 activités dans le profil. Une célébration s'affiche quand il est atteint.
 - **Hors connexion** : l'application garde une copie des fichiers ; la progression est renvoyée dès que le réseau revient.
 - **QCM** : l'ordre des réponses est mélangé à chaque affichage.

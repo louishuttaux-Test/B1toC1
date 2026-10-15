@@ -322,6 +322,48 @@ window.REGLES = [
   },
 
   {
+    id: "periphrases-verbales", cat: "conjugaison", niveau: "B1",
+    titre: "Venir de, être en train de, aller : situer une action",
+    resume: "Dire qu’une action vient de finir, est en cours ou va commencer, au présent comme au passé.",
+    corps: `
+      <p>Ces tournures (on dit aussi « périphrases verbales ») situent une action par rapport à un moment précis. Le verbe conjugué est <strong>venir</strong>, <strong>être</strong> ou <strong>aller</strong> ; l’autre verbe reste à l’infinitif.</p>
+      <table class="fiche-table">
+        <thead><tr><th scope="col">Sens</th><th scope="col">Au présent</th><th scope="col">Dans un récit au passé (imparfait)</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Passé récent</th><td>Le train <strong>vient de partir</strong>.</td><td>Le train <strong>venait de partir</strong> quand je suis arrivée.</td></tr>
+          <tr><th scope="row">Action en cours</th><td>Je <strong>suis en train de lire</strong>.</td><td>J’<strong>étais en train de lire</strong> quand le téléphone a sonné.</td></tr>
+          <tr><th scope="row">Futur proche</th><td>Il <strong>va pleuvoir</strong>.</td><td>J’<strong>allais sortir</strong> quand il s’est mis à pleuvoir.</td></tr>
+          <tr><th scope="row">Imminence</th><td>Je <strong>suis sur le point de partir</strong>.</td><td>J’<strong>étais sur le point d’abandonner</strong> quand…</td></tr>
+        </tbody>
+      </table>
+      <p>Dans un récit, ces tournures sont presque toujours à l’<strong>imparfait</strong> : elles décrivent la situation au moment où un événement (au passé composé) se produit.</p>
+      <p class="ex">Attention : <em>je viens de manger</em> (= il y a quelques minutes) ≠ <em>je viens manger</em> (= je me déplace pour manger).</p>`,
+    voir: ["passe-compose-imparfait", "plus-que-parfait"]
+  },
+
+  {
+    id: "expressions-de-duree", cat: "grammaire", niveau: "B1",
+    titre: "Il y a, depuis, pendant, en : exprimer le temps et la durée",
+    resume: "Situer un moment passé, dire qu’une situation continue, mesurer une durée.",
+    corps: `
+      <table class="fiche-table">
+        <thead><tr><th scope="col">Expression</th><th scope="col">Sens</th><th scope="col">Exemple</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">il y a + durée</th><td>un moment du passé, compté à partir d’aujourd’hui</td><td>Je suis arrivée à Lyon <strong>il y a</strong> cinq ans.</td></tr>
+          <tr><th scope="row">depuis + durée ou date</th><td>une situation qui a commencé et qui continue (verbe au présent)</td><td>J’habite à Lyon <strong>depuis</strong> cinq ans. <strong>Depuis</strong> 2021.</td></tr>
+          <tr><th scope="row">ça fait / il y a… que</th><td>même sens que <em>depuis</em>, en début de phrase (courant à l’oral)</td><td><strong>Ça fait</strong> cinq ans <strong>que</strong> j’habite ici.</td></tr>
+          <tr><th scope="row">pendant + durée</th><td>une durée limitée, terminée ou prévue</td><td>J’ai vécu à Nantes <strong>pendant</strong> deux ans.</td></tr>
+          <tr><th scope="row">en + durée</th><td>le temps nécessaire pour faire quelque chose</td><td>J’ai écrit ce texte <strong>en</strong> une heure.</td></tr>
+          <tr><th scope="row">dans + durée</th><td>un moment du futur, compté à partir d’aujourd’hui</td><td>Le train part <strong>dans</strong> dix minutes.</td></tr>
+        </tbody>
+      </table>
+      <h3>Dans un récit au passé</h3>
+      <p>On ne compte plus à partir d’aujourd’hui, mais à partir du moment raconté : <em>il y a deux jours</em> devient <em>deux jours <strong>plus tôt</strong></em> ; <em>hier</em> devient <em>la <strong>veille</strong></em> ; <em>demain</em> devient <em>le <strong>lendemain</strong></em>.</p>
+      <p class="ex">Avec <em>depuis</em> dans un récit, le verbe passe à l’imparfait : <em>Je vivais à Lyon <strong>depuis</strong> trois mois.</em></p>`,
+    voir: ["passe-compose-imparfait", "periphrases-verbales"]
+  },
+
+  {
     id: "conditionnel", cat: "conjugaison", niveau: "B2",
     titre: "Le conditionnel présent et passé",
     resume: "Politesse, conseil, hypothèse, information non confirmée.",
@@ -472,6 +514,31 @@ window.REGLES = [
   },
 
   /* ===================== VOCABULAIRE ===================== */
+
+  {
+    id: "se-souvenir-se-rappeler", cat: "vocabulaire", niveau: "B1",
+    titre: "Se souvenir, se rappeler, rappeler",
+    resume: "Deux verbes de même sens, deux constructions différentes ; et un faux ami : rappeler quelqu’un.",
+    corps: `
+      <table class="fiche-table">
+        <thead><tr><th scope="col">Verbe</th><th scope="col">Construction</th><th scope="col">Exemple</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">se souvenir</th><td>se souvenir <strong>de</strong> quelque chose ou de quelqu’un ; pronom <strong>en</strong></td><td>Je me souviens <strong>de</strong> ce voyage. Je m’<strong>en</strong> souviens.</td></tr>
+          <tr><th scope="row">se rappeler</th><td>se rappeler quelque chose, <strong>sans préposition</strong> ; pronom <strong>le, la, les</strong></td><td>Je me rappelle ce voyage. Je me <strong>le</strong> rappelle.</td></tr>
+          <tr><th scope="row">rappeler qqch à qqn</th><td>faire penser à quelque chose</td><td>Cette odeur <strong>me rappelle</strong> mon enfance.</td></tr>
+          <tr><th scope="row">rappeler qqn</th><td>téléphoner de nouveau</td><td>Je te <strong>rappelle</strong> ce soir.</td></tr>
+        </tbody>
+      </table>
+      <p>Les deux verbes peuvent être suivis d’un infinitif passé : <em>Je me souviens <strong>d’avoir</strong> pleuré. Je me rappelle <strong>avoir</strong> pleuré.</em></p>
+      <p class="ex">L’erreur fréquente « je me rappelle <s>de</s> ce voyage » est très répandue à l’oral, mais elle reste critiquée : à l’écrit, évite-la.</p>
+      <h3>Autour de la mémoire</h3>
+      <ul>
+        <li><strong>un souvenir</strong> (ce dont on se souvient) ≠ <strong>la mémoire</strong> (la faculté de se souvenir) : <em>J’ai une bonne mémoire ; j’ai de bons souvenirs.</em></li>
+        <li><strong>oublier</strong> quelque chose, <strong>oublier de</strong> faire quelque chose : <em>J’avais oublié mon billet ; j’avais oublié de le prendre.</em></li>
+        <li><em>avoir un trou de mémoire</em>, <em>ça me dit quelque chose</em>, <em>ça me revient</em> : expressions courantes à l’oral.</li>
+      </ul>`,
+    voir: ["pronoms-en-y", "expressions-idiomatiques"]
+  },
 
   {
     id: "donner-son-avis", cat: "vocabulaire", niveau: "B1",

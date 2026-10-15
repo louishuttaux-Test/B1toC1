@@ -3,9 +3,11 @@
   (lancement hors connexion, notifications de rappel).
   Après une mise à jour du site, change le numéro de VERSION.
 */
-var VERSION = "mon-francais-v4";
+var VERSION = "mon-francais-v5";
+var NB_UNITES = 30; // unites/u01.js … u30.js
 var FICHIERS = ["./", "index.html", "style.css", "app.js", "contenu.js", "regles.js", "illustrations.js", "config.js",
   "manifest.webmanifest", "icones/icone-192.png", "icones/badge-96.png"];
+for (var n = 1; n <= NB_UNITES; n++) FICHIERS.push("unites/u" + (n < 10 ? "0" : "") + n + ".js");
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(VERSION).then(function (c) { return c.addAll(FICHIERS); }).then(function () { return self.skipWaiting(); }));

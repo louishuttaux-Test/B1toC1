@@ -2,6 +2,7 @@
   "use strict";
 
   var P = window.PARCOURS, R = window.REGLES, CATS = window.CATEGORIES, THEMES = window.THEMES;
+  var CDEF = window.COMPETENCES_DEF, ETAPES = window.ETAPES || {};
   var C = window.CONFIG || {};
   var ILL = window.ILLUS;
   var tabbar = document.getElementById("tabbar");
@@ -26,7 +27,41 @@
     ["activites", "textes", "unites", "reglesLues", "jours", "reglages"].forEach(function (k) {
       if (!e[k] || typeof e[k] !== "object") e[k] = {};
     });
+    if (migrerIds(e)) aMigrer = true;
     return e;
+  }
+
+  /*
+    Migration des identifiants d'exercices.
+    Les exercices d'origine gardent leurs ids (a0, a1…) : rien à migrer pour eux.
+    Si un jour un id change, l'unité déclare  anciensIds: { "ancien": "nouveau" }  et la
+    progression est renommée ici, une seule fois. Aucune clé inconnue n'est jamais supprimée.
+  */
+  var aMigrer = false;
+  function migrerIds(e) {
+    var change = false;
+    P.unites.forEach(function (u) {
+      var m = u.anciensIds;
+      if (!m) return;
+      Object.keys(m).forEach(function (ancien) {
+        var a = "u" + u.id + "-" + ancien, n = "u" + u.id + "-" + m[ancien];
+        if (a === n) return;
+        if (e.activites[a] && !e.activites[n]) { e.activites[n] = e.activites[a]; delete e.activites[a]; change = true; }
+        if (e.textes[a] != null && e.textes[n] == null) { e.textes[n] = e.textes[a]; delete e.textes[a]; change = true; }
+        Object.keys(e.jours).forEach(function (d) {
+          var l = e.jours[d];
+          if (!Array.isArray(l)) return;
+          var k = l.indexOf(a);
+          if (k !== -1) { if (l.indexOf(n) === -1) l[k] = n; else l.splice(k, 1); change = true; }
+        });
+      });
+    });
+    return change;
+  }
+  function finirMigration() {
+    if (!aMigrer) return;
+    aMigrer = false;
+    sauver();
   }
 
   function cleCache(uid) { return CLE + ":" + (uid || "local"); }
@@ -125,6 +160,7 @@
       etat = normaliser(c && c.etat);
       profil.prenom = (c && c.prenom) || "";
       pret = true;
+      finirMigration();
       route();
       return;
     }
@@ -152,7 +188,7 @@
     }
     rendreNav();
     app.innerHTML = '<p class="chargement">Chargement de ta progression…</p>';
-    chargerDistant().then(function () { pret = true; route(); });
+    chargerDistant().then(function () { pret = true; finirMigration(); route(); });
   }
 
   function nettoyerUrl() {
@@ -223,7 +259,7 @@
     if (h[0] === "unite") {
       var u = P.unites.find(function (x) { return String(x.id) === h[1]; });
       if (u && u.activites) {
-        var i = parseInt(h[2], 10);
+        var i = /^\d+$/.test(h[2] || "") ? parseInt(h[2], 10) : indexParId(u, h[2]);
         if (isNaN(i) || i < 0 || i >= u.activites.length) i = premiereNonFaite(u);
         return afficherUnite(u, i);
       }
@@ -264,7 +300,12 @@
   }
   function regleParId(id) { return R.find(function (r) { return r.id === id; }); }
 
-  function cle(u, i) { return "u" + u.id + "-a" + i; }
+  // Clé de progression d'un exercice : « u1-a0 » pour les exercices d'origine, « u1-lec2 » pour les nouveaux.
+  function cle(u, i) { var a = u.activites[i]; return "u" + u.id + "-" + (a && a.id ? a.id : "a" + i); }
+  function indexParId(u, id) {
+    for (var k = 0; k < u.activites.length; k++) if (u.activites[k].id === id) return k;
+    return -1;
+  }
   function estFait(u, i) { var a = etat.activites[cle(u, i)]; return !!(a && a.fait); }
   function nbFaites(u) { return u.activites ? u.activites.filter(function (_, i) { return estFait(u, i); }).length : 0; }
   function terminee(u) { return !!u.activites && nbFaites(u) === u.activites.length; }
@@ -387,14 +428,8 @@
      Statistiques et estimation du niveau
      ================================================================= */
 
-  var COMPETENCES = [
-    { id: "lecture", type: "lecture", nom: "Compréhension écrite" },
-    { id: "ecoute", type: "ecoute", nom: "Compréhension orale" },
-    { id: "vocabulaire", type: "association", nom: "Vocabulaire" },
-    { id: "grammaire", type: "trous", nom: "Grammaire" },
-    { id: "ecriture", type: "ecriture", nom: "Production écrite" },
-    { id: "oral", type: "oral", nom: "Expression orale" }
-  ];
+  // Chaque exercice appartient à une compétence (champ comp) : les statistiques se calculent par compétence.
+  var COMPETENCES = CDEF.map(function (c) { return { id: c.id, type: c.id, nom: c.nom }; });
   var NIVEAUX = ["b1", "b2", "c1"];
   var NOMS_NIV = { b1: "B1", b2: "B2", c1: "C1" };
   var CONSEILS = {
@@ -435,7 +470,7 @@
   }
 
   function statsCompetence(c) {
-    var acts = toutesActivites().filter(function (x) { return x.a.type === c.type; });
+    var acts = toutesActivites().filter(function (x) { return x.a.comp === c.id; });
     var faites = acts.filter(function (x) { return x.res && x.res.fait; });
     var notees = faites.filter(function (x) { return x.res.total; });
     var s = 0, t = 0, parNiv = {};
@@ -480,7 +515,7 @@
   }
 
   function prochaineActivite(type) {
-    var acts = toutesActivites().filter(function (x) { return (!type || x.a.type === type) && !passee(x.u); });
+    var acts = toutesActivites().filter(function (x) { return (!type || x.a.comp === type) && !passee(x.u); });
     var libre = acts.find(function (x) { return !(x.res && x.res.fait); });
     if (libre) return libre;
     var notees = acts.filter(function (x) { return x.res && x.res.total; });
@@ -574,7 +609,8 @@
     return '<ol class="semaine-jours">' + html + "</ol>";
   }
 
-  var ICONES = { lecture: "📖", ecoute: "🎧", association: "🧩", trous: "✏️", ecriture: "📝", oral: "🎙️" };
+  var ICONES = {};
+  CDEF.forEach(function (c) { ICONES[c.id] = c.ico; });
   var MOTS_DEFAUT = ["flâner", "pourtant", "savourer", "dont", "la francophonie", "bien que", "un coup de foudre", "l’épanouissement"];
 
   /* ---------- Accueil ---------- */
@@ -607,7 +643,7 @@
           "</div>" +
           (reprise
             ? '<a class="btn btn-principal btn-grand" href="#/unite/' + reprise.id + "/" + k + '">' +
-                (Object.keys(etat.activites).length ? "Continuer" : "Commencer") + " : " + ICONES[reprise.activites[k].type] + " " + reprise.activites[k].titre.toLowerCase() + "</a>" +
+                (Object.keys(etat.activites).length ? "Continuer" : "Commencer") + " : " + ICONES[reprise.activites[k].comp] + " " + reprise.activites[k].titre.toLowerCase() + "</a>" +
               '<p class="ah-sous">Unité ' + reprise.id + " : " + reprise.titre + "</p>"
             : '<p class="ah-sous">Toutes les unités sont faites ou passées. Chapeau !</p>') +
         "</div>" +
@@ -887,22 +923,61 @@
      Unité
      ================================================================= */
 
+  function compDef(id) { return CDEF.find(function (c) { return c.id === id; }); }
+  function exosDe(u, comp) {
+    var out = [];
+    u.activites.forEach(function (a, k) { if (a.comp === comp) out.push(k); });
+    return out;
+  }
+  function etatComp(u, comp) {
+    var ks = exosDe(u, comp);
+    var faits = ks.filter(function (k) { return estFait(u, k); }).length;
+    var prochain = ks.find(function (k) { return !estFait(u, k); });
+    return { ks: ks, faits: faits, cible: prochain === undefined ? ks[0] : prochain };
+  }
+
+  function navUnite(u, i) {
+    var a = u.activites[i];
+    var comps = CDEF.filter(function (c) { return exosDe(u, c.id).length; }).map(function (c) {
+      var e = etatComp(u, c.id);
+      return '<li><a href="#/unite/' + u.id + "/" + e.cible + '" data-comp="' + c.id + '"' + (c.id === a.comp ? ' aria-current="step"' : "") +
+        ' class="' + (e.faits === e.ks.length ? "fait" : "") + '">' +
+        '<span class="etape-num" aria-hidden="true">' + c.ico + "</span>" +
+        '<span class="etape-nom">' + c.court + '</span><span class="comp-compte" data-compte="' + c.id + '">' + e.faits + "/" + e.ks.length + "</span></a></li>";
+    }).join("");
+    var ks = exosDe(u, a.comp);
+    var exos = ks.length > 1
+      ? '<ol class="exos" id="exos" aria-label="Exercices : ' + esc(compDef(a.comp).nom) + '">' + ks.map(function (k, n) {
+          var x = u.activites[k];
+          return '<li><a href="#/unite/' + u.id + "/" + k + '" data-i="' + k + '"' + (k === i ? ' aria-current="step"' : "") +
+            ' class="' + (estFait(u, k) ? "fait" : "") + '"><span class="exo-num">' + (n + 1) + '</span><span class="exo-nom">' + esc(x.titre) + "</span></a></li>";
+        }).join("") + "</ol>"
+      : "";
+    return '<ol class="etapes" id="etapes" aria-label="Compétences de l’unité">' + comps + "</ol>" + exos;
+  }
+
+  function majNavUnite(u) {
+    document.querySelectorAll("#exos a[data-i]").forEach(function (l) { l.classList.toggle("fait", estFait(u, +l.dataset.i)); });
+    document.querySelectorAll("#etapes a[data-comp]").forEach(function (l) {
+      var e = etatComp(u, l.dataset.comp);
+      l.classList.toggle("fait", e.faits === e.ks.length);
+      var c = l.querySelector("[data-compte]");
+      if (c) c.textContent = e.faits + "/" + e.ks.length;
+    });
+  }
+
   function afficherUnite(u, i) {
     var a = u.activites[i];
-    var niv = P.niveaux.find(function (n) { return n.id === u.niveau; });
     document.title = "Unité " + u.id + " : " + u.titre;
-
-    var etapes = '<ol class="etapes" id="etapes">' + u.activites.map(function (x, k) {
-      return '<li><a href="#/unite/' + u.id + "/" + k + '"' + (k === i ? ' aria-current="step"' : "") +
-        ' class="' + (estFait(u, k) ? "fait" : "") + '">' +
-        '<span class="etape-num" aria-hidden="true">' + ICONES[x.type] + "</span>" +
-        '<span class="etape-nom">' + x.titre + "</span></a></li>";
-    }).join("") + "</ol>";
+    var ks = exosDe(u, a.comp), rang = ks.indexOf(i) + 1;
+    var cd = compDef(a.comp);
 
     var aRelire = (a.regles || []).map(regleParId).filter(Boolean);
     var suivante = uniteSuivante(u.id);
-    var suite = i < u.activites.length - 1
-      ? '<a class="btn" href="#/unite/' + u.id + "/" + (i + 1) + '">Activité suivante : ' + u.activites[i + 1].titre.toLowerCase() + "</a>"
+    var proch = u.activites[i + 1];
+    var suite = proch
+      ? '<a class="btn" href="#/unite/' + u.id + "/" + (i + 1) + '">' +
+          (proch.comp === a.comp ? "Exercice suivant : " + esc(proch.titre.toLowerCase()) : "Compétence suivante : " + ICONES[proch.comp] + " " + compDef(proch.comp).court.toLowerCase()) + "</a>"
       : suivante
         ? '<a class="btn" href="#/unite/' + suivante.id + '">Unité suivante : ' + suivante.titre + "</a>"
         : '<a class="btn" href="#/">Revenir au parcours</a>';
@@ -920,10 +995,13 @@
           '<button type="button" class="btn-mini" id="passer-unite">' + (passee(u) ? "Rétablir cette unité" : "Passer cette unité") + "</button>") +
         "</div>" +
       "</header>" +
-      etapes +
+      navUnite(u, i) +
       '<article class="activite">' +
-        '<header class="activite-tete"><p class="activite-type">' + ICONES[a.type] + " " + a.titre + "</p><h2>" + a.sousTitre + "</h2>" +
-          (a.duree ? '<p class="duree">Environ ' + a.duree + "</p>" : "") + "</header>" +
+        '<header class="activite-tete"><p class="activite-type">' + cd.ico + " " + cd.court +
+          (ks.length > 1 ? '<span class="exo-rang"> · exercice ' + rang + " sur " + ks.length + "</span>" : "") + "</p>" +
+          "<h2>" + (a.sousTitre || a.titre) + "</h2>" +
+          '<p class="exo-meta">' + (a.etape && ETAPES[a.etape] ? '<span class="etape-badge e-' + a.etape + '">' + ETAPES[a.etape] + "</span>" : "") +
+          (a.duree ? '<span class="duree">Environ ' + a.duree + "</span>" : "") + "</p></header>" +
         (aRelire.length
           ? '<p class="a-relire">À relire dans les règles : ' + aRelire.map(function (r) {
               return '<a href="#/regles/' + r.id + '">' + r.titre + "</a>";
@@ -939,11 +1017,17 @@
       bp.textContent = passee(u) ? "Rétablir cette unité" : "Passer cette unité";
     });
 
-    var rendus = { lecture: rendreLecture, ecoute: rendreEcoute, association: rendreAssociation, trous: rendreTrous, ecriture: rendreEcriture, oral: rendreOral };
+    var rendus = {
+      qcm: rendreQcm, lecture: rendreQcm, ecoute: rendreQcm, vraifaux: rendreVraiFaux,
+      association: rendreAssociation, trous: rendreTrous, texteatrous: rendreTexteATrous, registre: rendreRegistre,
+      saisie: rendreSaisie, correction: rendreSaisie, transformation: rendreSaisie, reformulation: rendreSaisie,
+      ecriture: rendreEcriture, oral: rendreOral
+    };
     (rendus[a.type] || function () {})(document.getElementById("contenu-activite"), a, u, i);
     window.scrollTo(0, 0);
-    var actif = document.querySelector('#etapes [aria-current]');
-    if (actif) { var ol = actif.closest("ol"); ol.scrollLeft = actif.parentNode.offsetLeft - 16; }
+    [document.querySelector("#etapes [aria-current]"), document.querySelector("#exos [aria-current]")].forEach(function (actif) {
+      if (actif) { var ol = actif.closest("ol"); ol.scrollLeft = actif.parentNode.offsetLeft - 16; }
+    });
   }
 
   function enregistrer(u, i, score, total) {
@@ -954,71 +1038,111 @@
     setTimeout(function () { celebrer(score, total, avant < obj && faitesAujourdhui() >= obj); rendreNav(); }, 250);
     if (terminee(u)) delete etat.unites[u.id];
     sauver();
-    document.querySelectorAll("#etapes a").forEach(function (l, k) { l.classList.toggle("fait", estFait(u, k)); });
+    majNavUnite(u);
     var pu = document.getElementById("prog-unite");
     if (pu) pu.innerHTML = jauge(pct(nbFaites(u), u.activites.length)) + '<span class="pct">' + pct(nbFaites(u), u.activites.length) + " %</span>";
+    // Prévient l'exercice (par exemple pour débloquer la transcription d'une écoute).
+    var z = document.getElementById("contenu-activite");
+    if (z) z.dispatchEvent(new Event("verifie"));
   }
 
-  /* ---------- Questions à choix ---------- */
+  /* ---------- Outils communs aux exercices ---------- */
 
-  function htmlQuestions(qs, prefixe) {
-    return '<div class="questions">' + qs.map(function (q, k) {
-      return '<fieldset class="q" data-k="' + k + '">' +
-        '<legend><span class="q-num">' + (k + 1) + ".</span> " + q.q + "</legend>" +
-        melanger(q.options.map(function (o, j) { return { o: o, j: j }; })).map(function (x) {
-          return '<label class="opt"><input type="radio" name="' + prefixe + "-q" + k + '" value="' + x.j + '"><span>' + x.o + "</span></label>";
-        }).join("") +
-        '<p class="retour" hidden></p></fieldset>';
-    }).join("") +
-    '<div class="actions"><button class="btn" type="button" data-verifier>Vérifier mes réponses</button>' +
-    '<p class="score" aria-live="polite"></p></div></div>';
+  function htmlConsigne(a) { return a.consigne ? '<p class="consigne">' + a.consigne + "</p>" : ""; }
+  function htmlScore() { return '<div class="actions"><button class="btn" type="button" data-verifier>Vérifier mes réponses</button><p class="score" aria-live="polite"></p></div>'; }
+  function messageScore(score, total) {
+    return "Score : " + score + " sur " + total + (score === total ? ". Parfait." : ". Relis les explications, corrige, puis vérifie à nouveau.");
   }
 
-  function brancherQuestions(zone, qs, u, i) {
-    zone.querySelector("[data-verifier]").addEventListener("click", function () {
-      var score = 0, manquantes = 0;
-      qs.forEach(function (q, k) {
-        var fs = zone.querySelector('fieldset[data-k="' + k + '"]');
-        var choix = fs.querySelector("input:checked");
-        var r = fs.querySelector(".retour");
-        fs.classList.remove("juste", "faux");
-        r.hidden = false;
-        if (!choix) { manquantes++; r.textContent = "Choisis une réponse."; return; }
-        var ok = parseInt(choix.value, 10) === q.answer;
-        if (ok) score++;
-        fs.classList.add(ok ? "juste" : "faux");
-        r.innerHTML = (ok ? "<strong>Juste.</strong> " : "<strong>Pas tout à fait.</strong> Réponse attendue : " + q.options[q.answer] + ". ") + (q.explication || "");
-      });
-      var s = zone.querySelector(".score");
-      if (manquantes) { s.textContent = pluriel(manquantes, "question") + " sans réponse."; return; }
-      s.textContent = "Score : " + score + " sur " + qs.length + (score === qs.length ? ". Parfait." : ". Relis les explications, puis tu peux recommencer.");
-      enregistrer(u, i, score, qs.length);
-    });
+  // Comparaison tolérante : majuscules, ponctuation, espaces et apostrophes ne comptent pas.
+  // Les accents sont signalés mais ne font pas perdre le point.
+  function normStrict(s) {
+    return String(s == null ? "" : s).toLowerCase()
+      .replace(/œ/g, "oe").replace(/æ/g, "ae")
+      .replace(/[’‘`´]/g, "'")
+      .replace(/[.,;:!?«»"“”()\[\]…–—\-_/]/g, " ")
+      .replace(/\s*'\s*/g, "'")
+      .replace(/\s+/g, " ").trim();
   }
+  function normSouple(s) { return normStrict(s).normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+  function comparer(saisie, reponses) {
+    var st = normStrict(saisie), so = normSouple(saisie);
+    if (!so) return { vide: true };
+    for (var k = 0; k < reponses.length; k++) if (normStrict(reponses[k]) === st) return { ok: true };
+    for (k = 0; k < reponses.length; k++) if (normSouple(reponses[k]) === so) return { ok: true, accents: reponses[k] };
+    return { ok: false };
+  }
+  function retourSaisie(res, reponses, explication) {
+    if (res.cles) return (res.ok ? "<strong>Juste.</strong> Exemple de note : " : "<strong>Pas tout à fait.</strong> Il fallait noter : ") + esc(reponses[0]) + ". " + (explication || "");
+    var autres = reponses.slice(1);
+    if (res.ok && res.accents) return "<strong>Juste, mais attention aux accents :</strong> " + esc(res.accents) + ". " + (explication || "");
+    if (res.ok) return "<strong>Juste.</strong> " + (autres.length ? "Autre réponse possible : " + autres.map(esc).join(" / ") + ". " : "") + (explication || "");
+    return "<strong>Pas tout à fait.</strong> Réponse attendue : " + esc(reponses[0]) +
+      (autres.length ? " (ou : " + autres.map(esc).join(" / ") + ")" : "") + ". " + (explication || "");
+  }
+  // Prise de notes : la réponse est juste si elle contient chaque mot-clé (« a|b » = a ou b).
+  function contientCles(saisie, cles) {
+    var so = normSouple(saisie);
+    if (!so) return { vide: true };
+    return { ok: cles.every(function (g) { return g.split("|").some(function (alt) { return so.indexOf(normSouple(alt)) !== -1; }); }), cles: true };
+  }
+  var ATTR_SAISIE = ' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"';
 
-  /* ---------- Lecture ---------- */
+  /* ---------- Documents : texte à lire ou à écouter ---------- */
 
-  function rendreLecture(zone, a, u, i) {
-    zone.innerHTML =
-      '<p class="consigne">Lis le texte une première fois sans dictionnaire. Puis réponds aux questions en revenant au texte.</p>' +
-      '<div class="texte">' + a.texte.map(function (p, k) {
+  function htmlDocument(a) {
+    var d = a.document;
+    if (!d) return "";
+    if (a.comp === "ecoute") return htmlEcoute(d);
+    var source = [d.genre, d.source].filter(Boolean).join(" · ");
+    return '<details class="doc-lecture" open><summary>📄 ' + esc(d.titre) + "</summary>" +
+      (source ? '<p class="doc-source">' + esc(source) + "</p>" : "") +
+      '<div class="texte">' + d.texte.map(function (p, k) {
         return '<p><span class="para-num" aria-label="Paragraphe ' + (k + 1) + '">' + (k + 1) + "</span>" + p + "</p>";
-      }).join("") + "</div>" +
-      htmlQuestions(a.questions, cle(u, i));
-    brancherQuestions(zone, a.questions, u, i);
+      }).join("") + "</div></details>";
   }
-
-  /* ---------- Écoute ---------- */
 
   function voixFrancaise() {
     var v = window.speechSynthesis.getVoices();
     return v.find(function (x) { return /^fr[-_]FR/i.test(x.lang); }) || v.find(function (x) { return /^fr/i.test(x.lang); });
   }
+  var PRENOMS_H = /thomas|daniel|nicolas|henri|paul|jacques|antoine|olivier|mathieu|f[ée]lix|jean|luc\b|alain|fabrice|s[ée]bastien|vincent|guillaume|eddy|reed|rocko|grandpa|\bmale\b|homme/i;
+  // Choisit une voix française d'homme ou de femme quand l'appareil en propose plusieurs ;
+  // sinon, une seule voix avec une hauteur différente pour distinguer les personnes.
+  function voixPour(code) {
+    var genre = code ? code.charAt(0) : null, variante = !!(code && code.length > 1);
+    var v = voixGenre(genre);
+    if (variante) v.hauteur = v.hauteur * (genre === "h" ? 0.88 : 1.14);
+    return v;
+  }
+  function voixGenre(genre) {
+    var toutes = window.speechSynthesis.getVoices().filter(function (x) { return /^fr/i.test(x.lang); });
+    var fr = toutes.filter(function (x) { return /^fr[-_]FR/i.test(x.lang); });
+    var base = fr.length > 1 ? fr : toutes;
+    var trouvee = genre === "h" ? base.find(function (x) { return PRENOMS_H.test(x.name); })
+      : genre === "f" ? base.find(function (x) { return !PRENOMS_H.test(x.name); }) : null;
+    if (trouvee) return { voix: trouvee, hauteur: 1 };
+    return { voix: voixFrancaise(), hauteur: genre === "h" ? 0.8 : genre === "f" ? 1.15 : 1 };
+  }
+  function segmentsAudio(d) {
+    var segs = [];
+    if (d.repliques) d.repliques.forEach(function (r) {
+      var g = (d.locuteurs && d.locuteurs[r.loc]) || null;
+      r.texte.split(/(?<=[.!?:…])\s+/).forEach(function (ph) { segs.push({ t: ph, g: g }); });
+    });
+    else d.transcription.split(/(?<=[.!?:…])\s+/).forEach(function (ph) { segs.push({ t: ph, g: d.voix || null }); });
+    return segs;
+  }
+  function htmlTranscription(d) {
+    if (d.repliques) return d.repliques.map(function (r) { return '<p class="replique"><strong>' + esc(r.loc) + " :</strong> " + r.texte + "</p>"; }).join("");
+    return "<p>" + d.transcription + "</p>";
+  }
 
-  function rendreEcoute(zone, a, u, i) {
+  function htmlEcoute(d) {
     var possible = "speechSynthesis" in window;
-    zone.innerHTML =
-      '<p class="consigne">' + a.consigne + "</p>" +
+    var genre = [d.genre, d.source].filter(Boolean).join(" · ");
+    return '<div class="doc-ecoute">' +
+      '<p class="doc-source">🎧 ' + esc(d.titre) + (genre ? " · " + esc(genre) : "") + "</p>" +
       (possible
         ? '<div class="lecteur">' +
             '<button class="btn btn-principal" type="button" data-lire>Écouter</button>' +
@@ -1027,12 +1151,28 @@
             '<p class="lecteur-note" data-note></p>' +
           "</div>"
         : '<p class="alerte">Ce navigateur ne sait pas lire le texte à voix haute. Ouvre le site dans Chrome, Edge ou Safari, ou utilise la transcription.</p>') +
-      '<details class="transcription"><summary>Afficher la transcription</summary><p>' + a.transcription + "</p>" +
-      '<p class="petit">Conseil : réponds d’abord aux questions, puis vérifie avec la transcription.</p></details>' +
-      htmlQuestions(a.questions, cle(u, i));
+      '<div class="transcription-bloc">' +
+        '<button type="button" class="btn-mini" data-transcr' + (possible ? " disabled" : "") + ">Afficher la transcription</button>" +
+        (possible ? ' <span class="petit" data-transcr-note>Disponible après une écoute complète ou après la vérification.</span>' : "") +
+        '<div class="transcription" data-transcr-texte hidden>' + htmlTranscription(d) + "</div>" +
+      "</div></div>";
+  }
 
-    brancherQuestions(zone, a.questions, u, i);
-    if (!possible) return;
+  function brancherDocument(zone, a) {
+    var d = a.document;
+    if (!d || a.comp !== "ecoute") return;
+    var bt = zone.querySelector("[data-transcr]"), bloc = zone.querySelector("[data-transcr-texte]");
+    function debloquer() {
+      bt.disabled = false;
+      var n = zone.querySelector("[data-transcr-note]");
+      if (n) n.remove();
+    }
+    bt.addEventListener("click", function () {
+      bloc.hidden = !bloc.hidden;
+      bt.textContent = bloc.hidden ? "Afficher la transcription" : "Masquer la transcription";
+    });
+    zone.addEventListener("verifie", debloquer);
+    if (!("speechSynthesis" in window)) return;
 
     var note = zone.querySelector("[data-note]");
     function verifierVoix() {
@@ -1045,15 +1185,103 @@
       var synth = window.speechSynthesis;
       synth.cancel();
       var vitesse = parseFloat(zone.querySelector("[data-vitesse]").value);
-      var voix = voixFrancaise();
       // Phrase par phrase : certains navigateurs coupent les textes longs.
-      a.transcription.split(/(?<=[.!?:])\s+/).forEach(function (phrase) {
-        var e = new SpeechSynthesisUtterance(phrase);
-        e.lang = "fr-FR"; if (voix) e.voice = voix; e.rate = vitesse;
+      var segs = segmentsAudio(d);
+      segs.forEach(function (s, k) {
+        var e = new SpeechSynthesisUtterance(s.t), v = voixPour(s.g);
+        e.lang = "fr-FR"; if (v.voix) e.voice = v.voix; e.rate = vitesse; e.pitch = v.hauteur;
+        if (k === segs.length - 1) e.onend = debloquer;
         synth.speak(e);
       });
     });
     zone.querySelector("[data-stop]").addEventListener("click", arreterVoix);
+  }
+
+  /* ---------- Questions à choix (QCM) ---------- */
+
+  function htmlQuestions(qs, prefixe) {
+    return '<div class="questions">' + qs.map(function (q, k) {
+      return '<fieldset class="q" data-k="' + k + '">' +
+        '<legend><span class="q-num">' + (k + 1) + ".</span> " + q.q + "</legend>" +
+        melanger(q.options.map(function (o, j) { return { o: o, j: j }; })).map(function (x) {
+          return '<label class="opt"><input type="radio" name="' + prefixe + "-q" + k + '" value="' + x.j + '"><span>' + x.o + "</span></label>";
+        }).join("") +
+        '<p class="retour" hidden></p></fieldset>';
+    }).join("") + "</div>" + htmlScore();
+  }
+
+  function brancherQuestions(zone, qs, u, i) {
+    zone.querySelector("[data-verifier]").addEventListener("click", function () {
+      var score = 0, manquantes = 0;
+      qs.forEach(function (q, k) {
+        var fs = zone.querySelector('fieldset[data-k="' + k + '"]');
+        var choix = fs.querySelector("input:checked");
+        var r = fs.querySelector(".retour");
+        fs.classList.remove("juste", "faux");
+        r.hidden = false;
+        if (!choix) { manquantes++; r.textContent = "Choisis une réponse."; return; }
+        var j = parseInt(choix.value, 10), ok = j === q.answer;
+        if (ok) score++;
+        fs.classList.add(ok ? "juste" : "faux");
+        var pourquoi = !ok && q.pourquoi && q.pourquoi[j] ? "Tu as choisi « " + q.options[j] + " » : " + q.pourquoi[j] + " " : "";
+        r.innerHTML = (ok ? "<strong>Juste.</strong> " : "<strong>Pas tout à fait.</strong> " + pourquoi + "Réponse attendue : " + q.options[q.answer] + ". ") + (q.explication || "");
+      });
+      var s = zone.querySelector(".score");
+      if (manquantes) { s.textContent = pluriel(manquantes, "question") + " sans réponse."; return; }
+      s.textContent = messageScore(score, qs.length);
+      enregistrer(u, i, score, qs.length);
+    });
+  }
+
+  function rendreQcm(zone, a, u, i) {
+    zone.innerHTML = htmlConsigne(a) + htmlDocument(a) + htmlQuestions(a.questions, cle(u, i));
+    brancherDocument(zone, a);
+    brancherQuestions(zone, a.questions, u, i);
+  }
+
+  /* ---------- Vrai ou faux justifié ---------- */
+
+  function rendreVraiFaux(zone, a, u, i) {
+    var p = cle(u, i);
+    zone.innerHTML = htmlConsigne(a) + htmlDocument(a) +
+      '<div class="questions">' + a.items.map(function (it, k) {
+        var opts = melanger(it.justifs.map(function (t, j) { return { t: t, j: j }; }));
+        return '<fieldset class="q vf" data-k="' + k + '">' +
+          '<legend><span class="q-num">' + (k + 1) + ".</span> " + it.affirmation + "</legend>" +
+          '<div class="vf-choix">' +
+            '<label class="opt"><input type="radio" name="' + p + "-vf" + k + '" value="1"><span>Vrai</span></label>' +
+            '<label class="opt"><input type="radio" name="' + p + "-vf" + k + '" value="0"><span>Faux</span></label>' +
+          "</div>" +
+          '<div class="vf-justif" role="group" aria-label="Justification"><p class="label">Justifie : quelle phrase du document le prouve ?</p>' +
+            opts.map(function (x) {
+              return '<label class="opt"><input type="radio" name="' + p + "-j" + k + '" value="' + x.j + '"><span class="citation">« ' + esc(x.t) + " »</span></label>";
+            }).join("") +
+          "</div>" +
+          '<p class="retour" hidden></p></fieldset>';
+      }).join("") + "</div>" + htmlScore();
+    brancherDocument(zone, a);
+
+    zone.querySelector("[data-verifier]").addEventListener("click", function () {
+      var score = 0, manquantes = 0;
+      a.items.forEach(function (it, k) {
+        var fs = zone.querySelector('fieldset[data-k="' + k + '"]');
+        var vf = fs.querySelector('.vf-choix input:checked'), jc = fs.querySelector('.vf-justif input:checked'), j = jc ? jc.value : "";
+        var r = fs.querySelector(".retour");
+        fs.classList.remove("juste", "faux");
+        r.hidden = false;
+        if (!vf || j === "") { manquantes++; r.textContent = "Réponds vrai ou faux, puis choisis la justification."; return; }
+        var okVf = (vf.value === "1") === !!it.vrai, okJ = parseInt(j, 10) === it.answer;
+        score += (okVf ? 1 : 0) + (okJ ? 1 : 0);
+        fs.classList.add(okVf && okJ ? "juste" : "faux");
+        r.innerHTML = (okVf ? "<strong>" + (it.vrai ? "Vrai" : "Faux") + " : juste.</strong> " : "<strong>C’est " + (it.vrai ? "vrai" : "faux") + ".</strong> ") +
+          (okJ ? "Bonne justification. " : "La phrase qui le prouve : « " + esc(it.justifs[it.answer]) + " ». ") + (it.explication || "");
+      });
+      var s = zone.querySelector(".score");
+      if (manquantes) { s.textContent = pluriel(manquantes, "affirmation") + " à compléter."; return; }
+      var total = a.items.length * 2;
+      s.textContent = messageScore(score, total) + " (un point pour vrai ou faux, un point pour la justification)";
+      enregistrer(u, i, score, total);
+    });
   }
 
   /* ---------- Association ---------- */
@@ -1063,7 +1291,7 @@
     var options = '<option value="">Choisir une définition</option>' +
       defs.map(function (d) { return '<option value="' + d.k + '">' + d.t + "</option>"; }).join("");
     zone.innerHTML =
-      '<p class="consigne">' + a.consigne + "</p>" +
+      htmlConsigne(a) +
       '<div class="assoc">' + a.items.map(function (it, k) {
         var id = cle(u, i) + "-m" + k;
         return '<div class="assoc-ligne" data-k="' + k + '"><label for="' + id + '" class="assoc-terme">' + it.terme + "</label>" +
@@ -1089,21 +1317,22 @@
     });
   }
 
-  /* ---------- Texte à trous ---------- */
+  /* ---------- Phrases à trous (choix dans une liste) ---------- */
 
   function rendreTrous(zone, a, u, i) {
     zone.innerHTML =
-      '<details class="fiche" open><summary>La règle en bref</summary><div class="fiche-corps">' + a.fiche + "</div></details>" +
-      '<p class="consigne">' + a.consigne + "</p>" +
+      (a.fiche ? '<details class="fiche" open><summary>La règle en bref</summary><div class="fiche-corps">' + a.fiche + "</div></details>" : "") +
+      htmlConsigne(a) + htmlDocument(a) +
       '<ol class="phrases">' + a.phrases.map(function (p, k) {
         var opts = melanger(p.options.map(function (o, j) { return { j: j, o: o }; }));
         var sel = '<select aria-label="Réponse pour la phrase ' + (k + 1) + '"><option value="">…</option>' +
           opts.map(function (x) { return '<option value="' + x.j + '">' + x.o + "</option>"; }).join("") + "</select>";
-        var espace = /^[,.;:!?]/.test(p.apres) ? "" : " ";
+        var espace = /^[,.;:!?…]/.test(p.apres) ? "" : " ";
         return '<li class="phrase" data-k="' + k + '"><p>' + (p.avant ? p.avant + " " : "") + sel + espace + p.apres + "</p>" +
           '<p class="retour" hidden></p></li>';
       }).join("") + "</ol>" +
       '<div class="actions"><button class="btn" type="button" data-verifier>Vérifier</button><p class="score" aria-live="polite"></p></div>';
+    brancherDocument(zone, a);
 
     zone.querySelector("[data-verifier]").addEventListener("click", function () {
       var score = 0, vides = 0;
@@ -1126,13 +1355,149 @@
     });
   }
 
+  /* ---------- Réponse tapée : correction, transformation, reformulation ---------- */
+
+  var LIBELLES_ENONCE = { correction: "Phrase à corriger", transformation: "Phrase de départ", reformulation: "Phrase de départ", saisie: "" };
+
+  function rendreSaisie(zone, a, u, i) {
+    var lib = a.libelle != null ? a.libelle : LIBELLES_ENONCE[a.type] || "";
+    zone.innerHTML =
+      (a.fiche ? '<details class="fiche" open><summary>La règle en bref</summary><div class="fiche-corps">' + a.fiche + "</div></details>" : "") +
+      htmlConsigne(a) + htmlDocument(a) +
+      '<p class="petit">Tape ta réponse. Les majuscules et la ponctuation ne comptent pas ; les accents oubliés sont signalés.</p>' +
+      '<ol class="phrases">' + a.items.map(function (it, k) {
+        var plein = !it.avant && !it.apres;
+        var champ = '<input type="text" class="champ-saisie' + (plein ? " plein" : "") + '" aria-label="Réponse ' + (k + 1) + '"' + ATTR_SAISIE + ">";
+        var espace = it.apres && /^[,.;:!?…]/.test(it.apres) ? "" : " ";
+        return '<li class="phrase saisie" data-k="' + k + '">' +
+          (it.enonce ? '<p class="enonce' + (a.type === "correction" ? " fautive" : "") + '">' + (lib ? '<span class="enonce-lib">' + lib + " :</span> " : "") + it.enonce + "</p>" : "") +
+          (it.aide ? '<p class="aide">' + it.aide + "</p>" : "") +
+          '<p class="ligne-saisie">' + (it.avant ? it.avant + " " : "") + champ + (it.apres ? espace + it.apres : "") + "</p>" +
+          '<p class="retour" hidden></p></li>';
+      }).join("") + "</ol>" + htmlScore();
+    brancherDocument(zone, a);
+
+    zone.querySelector("[data-verifier]").addEventListener("click", function () {
+      var score = 0, vides = 0;
+      a.items.forEach(function (it, k) {
+        var li = zone.querySelector('.phrase[data-k="' + k + '"]');
+        var v = li.querySelector("input").value;
+        var res = it.cles ? contientCles(v, it.cles) : comparer(v, it.reponses);
+        var r = li.querySelector(".retour");
+        li.classList.remove("juste", "faux");
+        if (res.vide) { vides++; r.hidden = true; return; }
+        if (res.ok) score++;
+        li.classList.add(res.ok ? "juste" : "faux");
+        r.hidden = false;
+        r.innerHTML = retourSaisie(res, it.reponses, it.explication);
+      });
+      var s = zone.querySelector(".score");
+      if (vides) { s.textContent = pluriel(vides, "réponse") + " à écrire."; return; }
+      s.textContent = messageScore(score, a.items.length);
+      enregistrer(u, i, score, a.items.length);
+    });
+  }
+
+  /* ---------- Texte à compléter ---------- */
+
+  function rendreTexteATrous(zone, a, u, i) {
+    function champ(n) {
+      var t = a.trous[n - 1];
+      if (!t) return "";
+      var c = t.options
+        ? '<select aria-label="Trou ' + n + '"><option value="">…</option>' + melanger(t.options.map(function (o, j) { return { o: o, j: j }; })).map(function (x) {
+            return '<option value="' + x.j + '">' + x.o + "</option>";
+          }).join("") + "</select>"
+        : '<input type="text" aria-label="Trou ' + n + '" size="' + Math.max(6, Math.min(22, t.reponses[0].length + 2)) + '"' + ATTR_SAISIE + ">";
+      return '<span class="trou" data-t="' + (n - 1) + '"><span class="trou-num" aria-hidden="true">' + n + "</span>" + c +
+        (t.indice ? '<span class="indice">(' + t.indice + ")</span>" : "") + "</span>";
+    }
+    zone.innerHTML =
+      (a.fiche ? '<details class="fiche" open><summary>La règle en bref</summary><div class="fiche-corps">' + a.fiche + "</div></details>" : "") +
+      htmlConsigne(a) + htmlDocument(a) +
+      (a.trous.some(function (t) { return !t.options; }) ? '<p class="petit">Les majuscules ne comptent pas ; les accents oubliés sont signalés.</p>' : "") +
+      '<div class="texte texte-trous">' + a.texte.map(function (p) {
+        return "<p>" + p.replace(/\{\{(\d+)\}\}/g, function (_, n) { return champ(parseInt(n, 10)); }) + "</p>";
+      }).join("") + "</div>" +
+      '<ol class="corrections" hidden></ol>' + htmlScore();
+    brancherDocument(zone, a);
+
+    zone.querySelector("[data-verifier]").addEventListener("click", function () {
+      var score = 0, vides = 0, lignes = [];
+      a.trous.forEach(function (t, k) {
+        var sp = zone.querySelector('.trou[data-t="' + k + '"]');
+        var el = sp.querySelector("input, select");
+        sp.classList.remove("juste", "faux");
+        var res;
+        if (t.options) res = el.value === "" ? { vide: true } : { ok: parseInt(el.value, 10) === t.answer };
+        else res = comparer(el.value, t.reponses);
+        if (res.vide) { vides++; return; }
+        if (res.ok) score++;
+        sp.classList.add(res.ok ? "juste" : "faux");
+        var attendu = t.options ? [t.options[t.answer]] : t.reponses;
+        lignes.push('<li value="' + (k + 1) + '" class="' + (res.ok ? "juste" : "faux") + '">' + retourSaisie(res, attendu, t.explication) + "</li>");
+      });
+      var s = zone.querySelector(".score"), corr = zone.querySelector(".corrections");
+      if (vides) { s.textContent = pluriel(vides, "trou") + " à compléter."; return; }
+      corr.innerHTML = lignes.join(""); corr.hidden = false;
+      s.textContent = messageScore(score, a.trous.length);
+      enregistrer(u, i, score, a.trous.length);
+    });
+  }
+
+  /* ---------- Choix du registre ---------- */
+
+  var REGISTRES = ["familier", "courant", "soutenu"];
+
+  function rendreRegistre(zone, a, u, i) {
+    var p = cle(u, i), choix = a.choix || REGISTRES;
+    zone.innerHTML = htmlConsigne(a) +
+      '<div class="questions">' + a.items.map(function (it, k) {
+        return '<fieldset class="q registre" data-k="' + k + '">' +
+          '<legend><span class="q-num">' + (k + 1) + '.</span> <span class="citation">« ' + it.phrase + " »</span></legend>" +
+          (it.contexte ? '<p class="petit">' + it.contexte + "</p>" : "") +
+          '<div class="choix-ligne">' + choix.map(function (c) {
+            return '<label class="opt"><input type="radio" name="' + p + "-r" + k + '" value="' + c + '"><span>' + c + "</span></label>";
+          }).join("") + "</div>" +
+          '<p class="retour" hidden></p></fieldset>';
+      }).join("") + "</div>" + htmlScore();
+
+    zone.querySelector("[data-verifier]").addEventListener("click", function () {
+      var score = 0, manquantes = 0;
+      a.items.forEach(function (it, k) {
+        var fs = zone.querySelector('fieldset[data-k="' + k + '"]');
+        var c = fs.querySelector("input:checked"), r = fs.querySelector(".retour");
+        fs.classList.remove("juste", "faux");
+        r.hidden = false;
+        if (!c) { manquantes++; r.textContent = "Choisis un registre."; return; }
+        var ok = c.value === it.answer;
+        if (ok) score++;
+        fs.classList.add(ok ? "juste" : "faux");
+        r.innerHTML = (ok ? "<strong>Juste.</strong> " : "<strong>Pas tout à fait :</strong> registre " + it.answer + ". ") + (it.explication || "");
+      });
+      var s = zone.querySelector(".score");
+      if (manquantes) { s.textContent = pluriel(manquantes, "phrase") + " sans réponse."; return; }
+      s.textContent = messageScore(score, a.items.length);
+      enregistrer(u, i, score, a.items.length);
+    });
+  }
+
   /* ---------- Écriture ---------- */
+
+  function htmlObjectifs(a) {
+    return a.objectifs && a.objectifs.length
+      ? '<div class="objectifs"><p class="label">Objectifs</p><ul>' + a.objectifs.map(function (o) { return "<li>" + o + "</li>"; }).join("") + "</ul></div>"
+      : "";
+  }
 
   function rendreEcriture(zone, a, u, i) {
     var k = cle(u, i), id = k + "-texte";
     zone.innerHTML =
       '<p class="consigne">' + a.consigne + "</p>" +
-      '<p class="petit">Entre ' + a.min + " et " + a.max + " mots. Ton texte est enregistré automatiquement.</p>" +
+      htmlObjectifs(a) +
+      (a.depart ? '<div class="depart"><p class="label">Texte de départ</p><div class="texte">' + a.depart.split(/\n+/).map(function (p) { return "<p>" + p + "</p>"; }).join("") + "</div></div>" : "") +
+      '<p class="petit">Entre ' + a.min + " et " + a.max + " mots. Ton texte est enregistré automatiquement" +
+        (a.depart ? " ; le texte de départ est déjà dans le cahier, modifie-le directement" : "") + ".</p>" +
       '<label for="' + id + '" class="sr-only">Ton texte</label>' +
       '<textarea id="' + id + '" class="cahier seyes" spellcheck="false" rows="14"></textarea>' +
       '<p class="compteur" aria-live="polite"></p>' +
@@ -1148,7 +1513,7 @@
       '<p class="petit">Compare la structure et les formules, pas le contenu exact : ton texte peut être différent et tout aussi juste.</p></details>';
 
     var ta = zone.querySelector("textarea"), compteur = zone.querySelector(".compteur"), score = zone.querySelector(".score");
-    ta.value = etat.textes[k] || "";
+    ta.value = etat.textes[k] != null ? etat.textes[k] : (a.depart || "");
 
     function majCompteur() {
       var n = compterMots(ta.value);
@@ -1206,13 +1571,16 @@
 
     zone.innerHTML =
       '<p class="consigne">' + a.consigne + "</p>" +
+      (a.situation ? '<p class="situation">' + a.situation + "</p>" : "") +
+      htmlObjectifs(a) +
       '<p class="petit">Durée visée : ' + a.dureeCible + ". Tes enregistrements restent sur cet appareil et disparaissent quand tu quittes la page.</p>" +
 
       '<ol class="oral-etapes">' +
         '<li class="oral-etape"><h3>Prépare-toi</h3>' +
+          (a.plan ? '<p>Suis ce plan :</p><ol class="plan">' + a.plan.map(function (e) { return "<li>" + e + "</li>"; }).join("") + "</ol>" : "") +
           '<p>Note quelques mots-clés, pas des phrases entières. Ces expressions peuvent t’aider :</p>' +
           '<ul class="expressions">' + a.preparation.map(function (e) { return "<li>" + e + "</li>"; }).join("") + "</ul>" +
-          '<div class="actions"><button class="btn" type="button" data-prep>Lancer 1 minute de préparation</button><span class="minuteur" data-prep-temps aria-live="polite"></span></div>' +
+          '<div class="actions"><button class="btn" type="button" data-prep>Lancer ' + pluriel(a.prepMinutes || 1, "minute") + ' de préparation</button><span class="minuteur" data-prep-temps aria-live="polite"></span></div>' +
         "</li>" +
 
         '<li class="oral-etape"><h3>Enregistre-toi</h3>' +
@@ -1252,7 +1620,7 @@
     /* Préparation */
     var minPrep = null;
     zone.querySelector("[data-prep]").addEventListener("click", function () {
-      var aff = zone.querySelector("[data-prep-temps]"), reste = 60;
+      var aff = zone.querySelector("[data-prep-temps]"), reste = 60 * (a.prepMinutes || 1);
       clearInterval(minPrep);
       aff.textContent = formatTemps(reste);
       minPrep = setInterval(function () {
