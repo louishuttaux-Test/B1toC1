@@ -11,5 +11,5 @@
 */
 window.CONFIG = {
   supabaseUrl: "https://segqvtgxuuquqztelcjy.supabase.co",
-  supabaseAnonKey: ""   // ← colle ta clé « anon public » entre ces guillemets
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlZ3F2dGd4dXVxdXF6dGVsY2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIwNDkwNzQsImV4cCI6MjEwNzYyNTA3NH0.d1WUiAf1jBRjTaSnC6WYHFcjqYkEv_cTGEJ-WWcMpIg"   // ← colle ta clé « anon public » entre ces guillemets
 };
