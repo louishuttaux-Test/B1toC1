@@ -3,6 +3,8 @@
 
   var P = window.PARCOURS, R = window.REGLES, CATS = window.CATEGORIES, THEMES = window.THEMES;
   var C = window.CONFIG || {};
+  var ILL = window.ILLUS;
+  var tabbar = document.getElementById("tabbar");
   var app = document.getElementById("app");
   var nav = document.getElementById("nav");
   var CLE = "parcours-fle-v2";
@@ -18,10 +20,10 @@
      État et stockage
      ================================================================= */
 
-  function vide() { return { activites: {}, textes: {}, unites: {}, reglesLues: {} }; }
+  function vide() { return { activites: {}, textes: {}, unites: {}, reglesLues: {}, jours: {}, reglages: {} }; }
   function normaliser(e) {
     e = e && typeof e === "object" ? e : {};
-    ["activites", "textes", "unites", "reglesLues"].forEach(function (k) {
+    ["activites", "textes", "unites", "reglesLues", "jours", "reglages"].forEach(function (k) {
       if (!e[k] || typeof e[k] !== "object") e[k] = {};
     });
     return e;
@@ -177,28 +179,45 @@
      Navigation
      ================================================================= */
 
+  var ICO = {
+    parcours: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/></svg>',
+    progression: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+    regles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg>',
+    profil: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>'
+  };
+
   function rendreNav() {
-    if (!modeLocal && !utilisateur) { nav.innerHTML = ""; return; }
+    if (!modeLocal && !utilisateur) {
+      nav.innerHTML = ""; if (tabbar) tabbar.innerHTML = "";
+      document.body.classList.remove("connecte");
+      return;
+    }
+    document.body.classList.add("connecte");
     var h = location.hash.replace(/^#\/?/, "");
     var section = ["regles", "profil", "progression"].find(function (x) { return h.indexOf(x) === 0; }) || "parcours";
-    function lien(href, nom, id) {
-      return '<a href="' + href + '"' + (section === id ? ' aria-current="page"' : "") + ">" + nom + "</a>";
+    var liens = [
+      ["#/", "Parcours", "parcours"], ["#/progression", "Progrès", "progression"],
+      ["#/regles", "Règles", "regles"], ["#/profil", profil.prenom || "Profil", "profil"]
+    ];
+    function lien(l, tab) {
+      return '<a href="' + l[0] + '"' + (section === l[2] ? ' aria-current="page"' : "") + ">" + ICO[l[2]] + "<span>" + esc(l[1]) + "</span></a>";
     }
-    nav.innerHTML =
-      lien("#/", "Parcours", "parcours") +
-      lien("#/progression", "Progression", "progression") +
-      lien("#/regles", "Règles", "regles") +
-      lien("#/profil", esc(profil.prenom || "Mon profil"), "profil").replace("<a ", '<a class="nav-profil" ') +
-      '<span id="statut" class="statut' + (dernierStatut.err ? " erreur" : "") + '" aria-live="polite">' +
-        (modeLocal ? "" : esc(dernierStatut.t)) + "</span>";
+    var s = serie();
+    nav.innerHTML = liens.map(function (l) { return lien(l); }).join("") +
+      '<a class="nav-serie' + (faitesAujourdhui() ? " allumee" : "") + '" href="#/progression" aria-label="Série : ' + pluriel(s, "jour") + '">' + FLAMME + "<strong>" + s + "</strong></a>" +
+      '<span id="statut" class="statut' + (dernierStatut.err ? " erreur" : "") + '" aria-live="polite">' + (modeLocal ? "" : esc(dernierStatut.t)) + "</span>";
+    if (tabbar) tabbar.innerHTML = liens.map(function (l) { return lien(l, true); }).join("");
+    majBadge();
   }
 
   function route() {
     arreterVoix();
+    document.querySelectorAll(".modale-fond").forEach(function (m) { m.remove(); });
     if (!pret) return;
     if (modeRecup) return afficherNouveauMdp();
     rendreNav();
     if (!modeLocal && !utilisateur) return afficherConnexion();
+    document.body.dataset.page = location.hash.replace(/^#\/?/, "").split("/")[0] || "accueil";
 
     var h = location.hash.replace(/^#\/?/, "").split("/");
     if (h[0] === "unite") {
@@ -273,7 +292,9 @@
     var mode = "connexion";
     app.innerHTML =
       '<section class="auth">' +
-        '<div class="auth-intro"><p class="label">Du B1 au C1</p><h1 class="display">Progresser en français</h1></div>' +
+        '<div class="auth-intro">' + ILL.bao("content", "auth-bao") +
+          '<p class="auth-sur">Du B1 au C1, avec Summer</p><h1 class="display">Ton français, un peu chaque jour</h1>' +
+          '<ul class="auth-mots" aria-hidden="true"><li>savourer</li><li>pourtant</li><li>flâner</li><li>dont</li></ul></div>' +
         '<div class="auth-corps">' +
           '<p class="auth-lead">Connecte-toi pour retrouver ta progression sur tous tes appareils.</p>' +
           '<div class="onglets" role="group" aria-label="Choisir une action">' +
@@ -504,71 +525,145 @@
 
   var filtreNiveau = "tous";
 
+  /* ---------- Série de jours et objectif du jour ---------- */
+
+  function dateLocale(d) {
+    d = d || new Date();
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+  function decaler(dateStr, n) {
+    var p = dateStr.split("-"), d = new Date(+p[0], +p[1] - 1, +p[2]);
+    d.setDate(d.getDate() + n);
+    return dateLocale(d);
+  }
+  function faitesLe(dateStr) { return (etat.jours[dateStr] || []).length; }
+  function objectif() { return (etat.reglages && etat.reglages.objectif) || 2; }
+  function faitesAujourdhui() { return faitesLe(dateLocale()); }
+  function serie() {
+    var d = dateLocale(), n = 0;
+    if (!faitesLe(d)) d = decaler(d, -1);
+    while (faitesLe(d)) { n++; d = decaler(d, -1); }
+    return n;
+  }
+  function meilleureSerie() {
+    var dates = Object.keys(etat.jours).filter(faitesLe).sort(), best = 0, cur = 0, prev = null;
+    dates.forEach(function (d) { cur = prev && decaler(prev, 1) === d ? cur + 1 : 1; best = Math.max(best, cur); prev = d; });
+    return best;
+  }
+
+  var FLAMME = '<svg class="flamme" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9.5z" fill="#FFB627"/><path d="M12 12c.6 2 2.5 2.6 2.5 4.6a2.5 2.5 0 0 1-5 0c0-1.3.8-2 1.4-2.6.2 1 .7 1.4 1.1 1.4 0-1.2-.4-2.2 0-3.4z" fill="#E84A5F"/></svg>';
+
+  function anneau(n, total) {
+    var r = 22, c = 2 * Math.PI * r, p = Math.min(1, total ? n / total : 0);
+    return '<svg class="anneau" viewBox="0 0 56 56" aria-hidden="true">' +
+      '<circle cx="28" cy="28" r="' + r + '" class="anneau-fond"/>' +
+      '<circle cx="28" cy="28" r="' + r + '" class="anneau-plein" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + (c * (1 - p)).toFixed(1) + '"/>' +
+      (p >= 1 ? '<path d="M20 29 l6 6 l11 -13" class="anneau-ok"/>' : '<text x="28" y="33" text-anchor="middle">' + n + "</text>") +
+      "</svg>";
+  }
+
+  function semaine() {
+    var noms = ["D", "L", "M", "M", "J", "V", "S"], auj = dateLocale(), html = "";
+    for (var k = 6; k >= 0; k--) {
+      var d = decaler(auj, -k), p = d.split("-"), jour = new Date(+p[0], +p[1] - 1, +p[2]).getDay();
+      var n = faitesLe(d), atteint = n >= objectif();
+      html += '<li class="jour' + (n ? " actif" : "") + (atteint ? " atteint" : "") + (d === auj ? " aujourdhui" : "") + '">' +
+        '<span class="jour-nom">' + noms[jour] + "</span>" +
+        '<span class="jour-pastille" aria-label="' + (d === auj ? "Aujourd’hui" : d) + " : " + pluriel(n, "activité") + '">' + (n ? FLAMME : "") + "</span></li>";
+    }
+    return '<ol class="semaine-jours">' + html + "</ol>";
+  }
+
+  var ICONES = { lecture: "📖", ecoute: "🎧", association: "🧩", trous: "✏️", ecriture: "📝", oral: "🎙️" };
+  var MOTS_DEFAUT = ["flâner", "pourtant", "savourer", "dont", "la francophonie", "bien que", "un coup de foudre", "l’épanouissement"];
+
+  /* ---------- Accueil ---------- */
+
   function afficherAccueil() {
     document.title = "Mon parcours de français";
     var dispo = P.unites.filter(function (u) { return u.activites; });
     var reprise = dispo.find(function (u) { return !terminee(u) && !passee(u); });
-    var commence = Object.keys(etat.activites).length > 0;
     var rj = regleDuJour();
     var comps = COMPETENCES.map(statsCompetence);
+    var n = faitesAujourdhui(), obj = objectif(), s = serie();
 
+    var titre = n >= obj ? "Objectif du jour atteint. Bravo !"
+      : s > 0 && !n ? "Ta série de " + pluriel(s, "jour") + " t’attend."
+      : n ? "Encore " + pluriel(obj - n, "activité") + " pour ton objectif."
+      : "Prête pour un peu de français aujourd’hui ?";
+
+    var mots = reprise ? (reprise.activites.find(function (a) { return a.type === "association"; }) || {}).items : null;
+    mots = mots ? mots.map(function (it) { return it.terme.replace(/\s*\(.*\)$/, ""); }).slice(0, 6) : MOTS_DEFAUT.slice(0, 6);
+
+    var k = reprise ? premiereNonFaite(reprise) : 0;
     app.innerHTML =
-      '<section class="hero">' +
-        '<div class="hero-texte">' +
-          '<p class="hero-sur">' + (profil.prenom ? "Bonjour " + esc(profil.prenom) + " | " : "") + "du B1 au C1</p>" +
-          '<h1 class="display hero-titre">Progresser en français</h1>' +
-          '<p class="hero-meta">' + P.unites.length + " unités, " + COMPETENCES.length + " compétences, " + R.length + " règles</p>" +
+      '<section class="accueil-hero">' +
+        '<div class="ah-texte">' +
+          '<p class="ah-bonjour">' + (profil.prenom ? "Bonjour " + esc(profil.prenom) + " !" : "Bonjour !") + "</p>" +
+          '<h1 class="ah-titre">' + titre + "</h1>" +
+          '<div class="ah-stats">' +
+            '<a class="stat" href="#/progression">' + FLAMME + '<span><strong>' + s + "</strong> " + (s > 1 ? "jours" : "jour") + " de suite</span></a>" +
+            '<a class="stat" href="#/profil">' + anneau(n, obj) + '<span><strong>' + Math.min(n, obj) + " sur " + obj + "</strong> aujourd’hui</span></a>" +
+          "</div>" +
           (reprise
-            ? '<a class="btn btn-contour" href="#/unite/' + reprise.id + '"><span class="play" aria-hidden="true"></span>' + (commence ? "Reprendre" : "Commencer") + "</a>"
-            : '<p class="hero-meta">Toutes les unités disponibles sont faites ou passées.</p>') +
+            ? '<a class="btn btn-principal btn-grand" href="#/unite/' + reprise.id + "/" + k + '">' +
+                (Object.keys(etat.activites).length ? "Continuer" : "Commencer") + " : " + ICONES[reprise.activites[k].type] + " " + reprise.activites[k].titre.toLowerCase() + "</a>" +
+              '<p class="ah-sous">Unité ' + reprise.id + " : " + reprise.titre + "</p>"
+            : '<p class="ah-sous">Toutes les unités sont faites ou passées. Chapeau !</p>') +
         "</div>" +
-        (reprise
-          ? '<a class="hero-carte" href="#/unite/' + reprise.id + '">' +
-              '<span class="label">' + (nbFaites(reprise) ? "Unité en cours" : "Prochaine unité") + "</span>" +
-              '<span class="hero-carte-num">' + pad(reprise.id) + "</span>" +
-              '<span class="hero-carte-titre">' + reprise.titre + "</span>" +
-              '<span class="prog">' + jauge(pct(nbFaites(reprise), reprise.activites.length)) +
-                '<span class="pct">' + pct(nbFaites(reprise), reprise.activites.length) + " %</span></span>" +
-            "</a>"
-          : "") +
+        '<div class="ah-scene" aria-hidden="true">' +
+          '<div class="bulles">' + mots.map(function (m, i) { return '<span class="bulle" style="--i:' + i + '">' + esc(m) + "</span>"; }).join("") + "</div>" +
+          ILL.bao(n >= obj ? "bravo" : "lit", "ah-bao") +
+          '<svg class="ah-tasse" viewBox="0 0 80 70"><path class="vap" d="M30 18 q-6 -8 0 -16 M44 18 q-6 -8 0 -16" stroke="#9AA3C7" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M14 26 h46 v14 a23 23 0 0 1 -46 0z" fill="#1FA58C"/><path d="M60 32 q12 0 10 10 q-2 8 -12 6" stroke="#1FA58C" stroke-width="5" fill="none"/><ellipse cx="37" cy="64" rx="30" ry="5" fill="#1F2A5C" opacity=".12"/></svg>' +
+        "</div>" +
       "</section>" +
 
-      '<section class="competences-mini" aria-labelledby="t-comp">' +
-        '<div class="titre-bloc"><p class="label">Tes</p><h2 class="display" id="t-comp">Compétences</h2>' +
-          '<a class="lien-fort" href="#/progression">Voir la progression détaillée</a></div>' +
-        '<ul class="comp-mini">' + comps.map(function (c) {
-          var p = pct(c.faites, c.total);
-          return "<li><span class=\"comp-nom\">" + c.def.nom + "</span>" +
-            '<span class="comp-niv">' + (c.est ? c.est.court : "–") + "</span>" +
-            jauge(p) + '<span class="pct">' + p + " %</span></li>";
-        }).join("") + "</ul>" +
+      '<section class="bandeau-semaine" aria-label="Ta semaine">' +
+        '<div><h2 class="petit-titre">Ta semaine</h2><p class="petit">Meilleure série : ' + pluriel(meilleureSerie(), "jour") + "</p></div>" +
+        semaine() +
       "</section>" +
 
-      '<aside class="regle-jour" aria-labelledby="rj-titre">' +
-        '<p class="label" id="rj-titre">La règle du jour</p>' +
-        '<p class="rj-nom"><a href="#/regles/' + rj.id + '">' + rj.titre + "</a></p>" +
-        "<p>" + rj.resume + "</p>" +
-      "</aside>" +
+      '<div class="duo">' +
+        '<aside class="regle-jour" aria-labelledby="rj-titre">' +
+          '<p class="eyebrow" id="rj-titre">💡 La règle du jour</p>' +
+          '<p class="rj-nom"><a href="#/regles/' + rj.id + '">' + rj.titre + "</a></p>" +
+          "<p>" + rj.resume + "</p>" + ILL.bao("lit", "rj-bao") +
+        "</aside>" +
+        '<section class="competences-mini" aria-labelledby="t-comp">' +
+          '<div class="titre-ligne"><h2 class="petit-titre" id="t-comp">Tes compétences</h2><a class="lien-fort" href="#/progression">Détails</a></div>' +
+          '<ul class="comp-mini">' + comps.map(function (c) {
+            var p = pct(c.faites, c.total);
+            return '<li><span class="comp-ico" aria-hidden="true">' + ICONES[c.def.type] + '</span><span class="comp-nom">' + c.def.nom + "</span>" +
+              '<span class="comp-niv">' + (c.est ? c.est.court : "") + "</span>" + jauge(p) + "</li>";
+          }).join("") + "</ul>" +
+        "</section>" +
+      "</div>" +
 
-      '<section class="selecteur" aria-labelledby="t-niv">' +
-        '<p class="label">Parcours par</p>' +
-        '<h2 class="display" id="t-niv">Niveaux</h2>' +
-        '<div class="niv-choix" role="group" aria-label="Filtrer par niveau">' +
-          ["tous"].concat(NIVEAUX).map(function (n) {
-            return '<button type="button" data-niv="' + n + '" aria-pressed="' + (filtreNiveau === n) + '"' +
-              (n === "tous" ? ' class="mot">Tous' : ">" + NOMS_NIV[n]) + "</button>";
+      '<section class="explorer" aria-labelledby="t-exp">' +
+        '<h2 class="section-titre" id="t-exp">Explorer par thème</h2>' +
+        '<div class="themes" role="group" aria-label="Filtrer par thème">' +
+          [{ t: "tous", nom: "Tout le parcours" }].concat(THEMES.map(function (t) { return { t: t, nom: t }; }), [{ t: "chine", nom: "Liens avec la Chine" }]).map(function (x) {
+            var nb = P.unites.filter(function (u) { return x.t === "tous" || (x.t === "chine" ? u.chine : u.theme === x.t); }).length;
+            var illu = x.t === "tous" ? '<span class="theme-tous">' + ILL.bao("content") + "</span>"
+              : x.t === "chine" ? '<span class="theme-chine">中</span>' : ILL.scene(slugTheme(x.t));
+            return '<button type="button" class="theme" data-theme="' + esc(x.t) + '" aria-pressed="' + (filtreTheme === x.t) + '">' +
+              '<span class="theme-illu">' + illu + "</span>" +
+              '<span class="theme-nom">' + x.nom + '</span><span class="theme-nb">' + pluriel(nb, "unité") + "</span></button>";
           }).join("") +
         "</div>" +
-        '<div class="filtres" role="group" aria-label="Filtrer par thème">' +
-          ["tous"].concat(THEMES, ["chine"]).map(function (t) {
-            var nom = t === "tous" ? "Tous les thèmes" : t === "chine" ? "Liens avec la Chine" : t;
-            return '<button type="button" data-theme="' + esc(t) + '" aria-pressed="' + (filtreTheme === t) + '"' + (t === "chine" ? ' class="filtre-chine"' : "") + ">" + nom + "</button>";
+      "</section>" +
+
+      '<section class="selecteur" id="parcours" aria-labelledby="t-niv">' +
+        '<h2 class="section-titre" id="t-niv">Le parcours</h2>' +
+        '<div class="niv-choix" role="group" aria-label="Filtrer par niveau">' +
+          ["tous"].concat(NIVEAUX).map(function (n) {
+            return '<button type="button" data-niv="' + n + '" aria-pressed="' + (filtreNiveau === n) + '">' + (n === "tous" ? "Tous les niveaux" : NOMS_NIV[n]) + "</button>";
           }).join("") +
         "</div>" +
       "</section>" +
 
       '<div id="liste"></div>' +
-      '<p class="aide-passer">Une unité trop facile ou sans intérêt pour toi ? « Passer » la retire des suggestions, mais elle reste accessible.</p>';
+      '<p class="aide-passer">Une unité trop facile ? « Passer » la retire des suggestions, mais elle reste accessible.</p>';
 
     app.querySelectorAll("[data-niv]").forEach(function (b) {
       b.addEventListener("click", function () {
@@ -582,6 +677,7 @@
         filtreTheme = b.dataset.theme;
         app.querySelectorAll("[data-theme]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
         rendreListe();
+        document.getElementById("parcours").scrollIntoView({ behavior: mouvementReduit() ? "auto" : "smooth", block: "start" });
       });
     });
     document.getElementById("liste").addEventListener("click", function (e) {
@@ -607,40 +703,107 @@
       });
       if (!us.length) return;
       var sn = statsGroupe(function (u) { return u.niveau === n.id; });
-      html += '<section class="niveau" aria-labelledby="niv-' + n.id + '">' +
-        '<div class="niveau-tete"><div><p class="label">Niveau ' + NOMS_NIV[n.id] + "</p>" +
-          '<h2 class="display" id="niv-' + n.id + '">' + n.titre + "</h2>" +
-          '<p class="niveau-desc">' + n.description + "</p></div>" +
+      html += '<section class="niveau niv-' + n.id + '" aria-labelledby="niv-' + n.id + '">' +
+        '<div class="niveau-tete">' +
+          '<span class="niveau-badge" aria-hidden="true">' + NOMS_NIV[n.id] + "</span>" +
+          '<div><h2 id="niv-' + n.id + '">' + n.titre + '</h2><p class="niveau-desc">' + n.description + "</p></div>" +
           '<div class="niveau-prog">' + jauge(sn.pct) + '<span class="pct">' + sn.pct + " %</span></div>" +
         "</div>" +
         '<ol class="cartes">' + us.map(carteUnite).join("") + "</ol></section>";
     });
-    document.getElementById("liste").innerHTML = html || '<p class="vide">Aucune unité ne correspond à ces filtres.</p>';
+    document.getElementById("liste").innerHTML = html || '<p class="vide">Aucune unité ne correspond à ces filtres. Choisis « Tout le parcours » pour tout revoir.</p>';
   }
 
   function carteUnite(u) {
-    var dispo = !!u.activites, p = dispo ? pct(nbFaites(u), u.activites.length) : 0;
-    var classe = !dispo ? "a-venir" : terminee(u) ? "terminee" : passee(u) ? "passee" : nbFaites(u) ? "en-cours" : "a-faire";
-    var badge = terminee(u) ? '<span class="affiche-badge">Faite</span>'
-      : passee(u) ? '<span class="affiche-badge passee">Passée</span>' : "";
-    var inner = '<span class="affiche-num">' + pad(u.id) + "</span>" + badge +
-      (u.chine ? '<span class="affiche-chine" title="Lien avec la Chine">中</span>' : "");
-    var affiche = dispo
-      ? '<a class="affiche t-' + slugTheme(u.theme) + '" href="#/unite/' + u.id + '" tabindex="-1" aria-hidden="true">' + inner + "</a>"
-      : '<div class="affiche t-' + slugTheme(u.theme) + '" aria-hidden="true">' + inner + "</div>";
+    var dispo = !!u.activites, nf = dispo ? nbFaites(u) : 0, tot = dispo ? u.activites.length : 0, p = pct(nf, tot);
+    var classe = !dispo ? "a-venir" : terminee(u) ? "terminee" : passee(u) ? "passee" : nf ? "en-cours" : "a-faire";
+    var badge = terminee(u) ? '<span class="pastille pastille-ok">✓ Faite</span>'
+      : passee(u) ? '<span class="pastille">Passée</span>'
+      : nf ? '<span class="pastille pastille-cours">En cours</span>' : "";
     var action = dispo && !terminee(u)
-      ? '<button type="button" class="btn-mini" data-passer="' + u.id + '" aria-label="' + (passee(u) ? "Rétablir" : "Passer") + " l’unité " + u.id + '">' + (passee(u) ? "Rétablir" : "Passer") + "</button>"
+      ? '<button type="button" class="btn-passer" data-passer="' + u.id + '" aria-label="' + (passee(u) ? "Rétablir" : "Passer") + " l’unité " + u.id + '">' + (passee(u) ? "Rétablir" : "Passer") + "</button>"
       : "";
     return '<li class="carte ' + classe + '">' +
-      '<p class="carte-sur">' + u.theme + " / " + NOMS_NIV[u.niveau] + (u.chine ? " / Chine" : "") + "</p>" +
-      affiche +
-      '<h3 class="carte-titre">' + (dispo ? '<a href="#/unite/' + u.id + '">' + u.titre + "</a>" : u.titre) + "</h3>" +
-      '<p class="carte-obj">' + u.objectif + "</p>" +
-      (dispo
-        ? '<div class="carte-prog">' + jauge(p) + '<span class="pct">' + p + " %</span></div>"
-        : '<p class="carte-avenir">À venir</p>') +
-      (action ? '<div class="carte-bas"><span></span>' + action + "</div>" : "") +
+      '<a class="carte-lien" href="#/unite/' + u.id + '">' +
+        '<span class="carte-illu">' + ILL.scene(slugTheme(u.theme)) +
+          '<span class="carte-num">Unité ' + u.id + "</span>" + badge +
+          (u.chine ? '<span class="carte-chine" title="Lien avec la Chine">中</span>' : "") +
+        "</span>" +
+        '<span class="carte-corps">' +
+          '<span class="carte-sur">' + u.theme + "</span>" +
+          '<span class="carte-titre">' + u.titre + "</span>" +
+          '<span class="carte-obj">' + u.objectif + "</span>" +
+          '<span class="carte-prog">' + jauge(p) + '<span class="pct">' + nf + " / " + tot + "</span></span>" +
+        "</span>" +
+      "</a>" + action +
     "</li>";
+  }
+
+  /* ---------- Célébrations ---------- */
+
+  function mouvementReduit() { return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+
+  function confettis() {
+    if (mouvementReduit()) return;
+    var couleurs = ["#FFB627", "#E84A5F", "#1FA58C", "#5B6CFF", "#FF8FB1"];
+    var box = document.createElement("div");
+    box.className = "confettis";
+    box.setAttribute("aria-hidden", "true");
+    for (var i = 0; i < 70; i++) {
+      var s = document.createElement("span");
+      s.style.left = Math.random() * 100 + "%";
+      s.style.background = couleurs[i % couleurs.length];
+      s.style.animationDelay = Math.random() * 0.4 + "s";
+      s.style.animationDuration = 1.6 + Math.random() * 1.4 + "s";
+      s.style.setProperty("--x", (Math.random() * 160 - 80) + "px");
+      s.style.setProperty("--r", (Math.random() * 720 - 360) + "deg");
+      if (i % 3 === 0) s.style.borderRadius = "50%";
+      box.appendChild(s);
+    }
+    document.body.appendChild(box);
+    setTimeout(function () { box.remove(); }, 3400);
+  }
+
+  var minuteurToast;
+  function toast(html, humeur) {
+    var t = document.getElementById("toast");
+    if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
+    t.innerHTML = ILL.bao(humeur || "bravo", "toast-bao") + '<p>' + html + "</p>";
+    t.classList.remove("visible"); void t.offsetWidth; t.classList.add("visible");
+    clearTimeout(minuteurToast);
+    minuteurToast = setTimeout(function () { t.classList.remove("visible"); }, 3800);
+  }
+
+  var BRAVOS = ["Bravo !", "Superbe !", "Excellent travail !", "Chapeau !", "Quelle régularité !", "Tu progresses vite !"];
+  var COURAGE = ["Ce n’est pas grave : relis les explications et recommence.", "Chaque erreur t’apprend quelque chose.", "Pas à pas, on avance !"];
+
+  function celebrer(score, total, objectifVientDetreAtteint) {
+    var r = total ? score / total : 1;
+    if (objectifVientDetreAtteint) {
+      confettis();
+      var s = serie();
+      var m = document.createElement("div");
+      m.className = "modale-fond";
+      m.innerHTML = '<div class="modale" role="dialog" aria-modal="true" aria-labelledby="m-titre">' + ILL.bao("bravo", "modale-bao") +
+        '<h2 id="m-titre">Objectif du jour atteint !</h2>' +
+        '<p class="modale-serie">' + FLAMME + " " + pluriel(s, "jour") + " de suite</p>" +
+        "<p>" + (s >= 7 ? "Une semaine entière ou plus : c’est exactement comme ça qu’on progresse." : s >= 3 ? "Ta régularité paie. Reviens demain pour allonger ta série !" : "Reviens demain pour commencer une belle série.") + "</p>" +
+        '<button type="button" class="btn btn-principal" data-fermer>Continuer</button></div>';
+      document.body.appendChild(m);
+      var fermer = function () { m.remove(); };
+      m.addEventListener("click", function (e) { if (e.target === m || e.target.closest("[data-fermer]")) fermer(); });
+      m.querySelector("[data-fermer]").focus();
+      majBadge();
+      return;
+    }
+    if (r >= 0.8) { confettis(); toast("<strong>" + BRAVOS[Math.floor(Math.random() * BRAVOS.length)] + "</strong> " + score + " sur " + total + "."); }
+    else if (r >= 0.5) toast("<strong>Pas mal !</strong> " + score + " sur " + total + ". Relis les explications pour viser plus haut.", "content");
+    else toast("<strong>" + score + " sur " + total + ".</strong> " + COURAGE[Math.floor(Math.random() * COURAGE.length)], "content");
+  }
+
+  function majBadge() {
+    if (!("setAppBadge" in navigator)) return;
+    try { if (faitesAujourdhui() >= objectif()) navigator.clearAppBadge(); else navigator.setAppBadge(1); } catch (e) { /* rien */ }
   }
 
   /* =================================================================
@@ -660,7 +823,7 @@
     }
 
     app.innerHTML =
-      '<header class="page-tete"><p class="label">Tableau de</p><h1 class="display">Progression</h1></header>' +
+      '<header class="page-tete"><h1 class="display">Ta progression</h1><p class="lead">' + FLAMME + ' ' + pluriel(serie(), "jour") + ' de suite, record : ' + pluriel(meilleureSerie(), "jour") + '. ' + pluriel(Object.keys(etat.jours).filter(faitesLe).length, "jour") + ' de travail au total.</p></header>' +
 
       '<section class="prog-global" aria-label="Progression globale">' +
         '<p class="gros-chiffre">' + g.pct + "<small>%</small></p>" +
@@ -675,7 +838,7 @@
       "</section>" +
 
       '<section class="section-prog" aria-labelledby="t-c">' +
-        '<div class="titre-bloc"><p class="label">Par</p><h2 class="display" id="t-c">Compétence</h2></div>' +
+        '<div class="titre-bloc"><h2 class="display" id="t-c">Compétence</h2></div>' +
         '<div class="comp-grille">' + comps.map(function (c) {
           var p = pct(c.faites, c.total);
           var pos = c.est ? Math.max(3, Math.min(97, c.est.pos / 3 * 100)) : null;
@@ -701,13 +864,13 @@
       "</section>" +
 
       '<section class="section-prog" aria-labelledby="t-t">' +
-        '<div class="titre-bloc"><p class="label">Par</p><h2 class="display" id="t-t">Thème</h2></div>' +
+        '<div class="titre-bloc"><h2 class="display" id="t-t">Thème</h2></div>' +
         '<ul class="lignes">' + THEMES.map(function (t) { return ligne(t, statsGroupe(function (u) { return u.theme === t; })); }).join("") +
           ligne("Liens avec la Chine", statsGroupe(function (u) { return u.chine; })) + "</ul>" +
       "</section>" +
 
       '<section class="section-prog" aria-labelledby="t-n">' +
-        '<div class="titre-bloc"><p class="label">Par</p><h2 class="display" id="t-n">Niveau</h2></div>' +
+        '<div class="titre-bloc"><h2 class="display" id="t-n">Niveau</h2></div>' +
         '<ul class="lignes">' + P.niveaux.map(function (n) { return ligne(n.titre, statsGroupe(function (u) { return u.niveau === n.id; })); }).join("") + "</ul>" +
       "</section>" +
 
@@ -732,7 +895,7 @@
     var etapes = '<ol class="etapes" id="etapes">' + u.activites.map(function (x, k) {
       return '<li><a href="#/unite/' + u.id + "/" + k + '"' + (k === i ? ' aria-current="step"' : "") +
         ' class="' + (estFait(u, k) ? "fait" : "") + '">' +
-        '<span class="etape-num">' + (k + 1) + "</span>" +
+        '<span class="etape-num" aria-hidden="true">' + ICONES[x.type] + "</span>" +
         '<span class="etape-nom">' + x.titre + "</span></a></li>";
     }).join("") + "</ol>";
 
@@ -745,18 +908,21 @@
         : '<a class="btn" href="#/">Revenir au parcours</a>';
 
     app.innerHTML =
-      '<nav class="fil"><a href="#/">Parcours</a></nav>' +
+      '<nav class="fil"><a href="#/">‹ Parcours</a></nav>' +
       '<header class="unite-tete t-' + slugTheme(u.theme) + '">' +
-        '<p class="label">Unité ' + pad(u.id) + " | " + u.theme + " | " + NOMS_NIV[u.niveau] + "</p>" +
+        '<div class="unite-illu">' + ILL.scene(slugTheme(u.theme)) + "</div>" +
+        '<div class="unite-info">' +
+        '<p class="unite-sur">Unité ' + u.id + ", niveau " + NOMS_NIV[u.niveau] + ", " + u.theme.toLowerCase() + (u.chine ? ' <span class="carte-chine">中</span>' : "") + "</p>" +
         '<h1 class="display unite-titre">' + u.titre + "</h1>" +
         '<p class="unite-objectif">' + u.objectif + "</p>" +
         '<div class="unite-prog" id="prog-unite">' + jauge(pct(nbFaites(u), u.activites.length)) + '<span class="pct">' + pct(nbFaites(u), u.activites.length) + " %</span></div>" +
         (terminee(u) ? "" :
           '<button type="button" class="btn-mini" id="passer-unite">' + (passee(u) ? "Rétablir cette unité" : "Passer cette unité") + "</button>") +
+        "</div>" +
       "</header>" +
       etapes +
       '<article class="activite">' +
-        '<header class="activite-tete"><h2>' + a.sousTitre + "</h2>" +
+        '<header class="activite-tete"><p class="activite-type">' + ICONES[a.type] + " " + a.titre + "</p><h2>" + a.sousTitre + "</h2>" +
           (a.duree ? '<p class="duree">Environ ' + a.duree + "</p>" : "") + "</header>" +
         (aRelire.length
           ? '<p class="a-relire">À relire dans les règles : ' + aRelire.map(function (r) {
@@ -776,10 +942,16 @@
     var rendus = { lecture: rendreLecture, ecoute: rendreEcoute, association: rendreAssociation, trous: rendreTrous, ecriture: rendreEcriture, oral: rendreOral };
     (rendus[a.type] || function () {})(document.getElementById("contenu-activite"), a, u, i);
     window.scrollTo(0, 0);
+    var actif = document.querySelector('#etapes [aria-current]');
+    if (actif) { var ol = actif.closest("ol"); ol.scrollLeft = actif.parentNode.offsetLeft - 16; }
   }
 
   function enregistrer(u, i, score, total) {
+    var avant = faitesAujourdhui(), obj = objectif(), d = dateLocale();
     etat.activites[cle(u, i)] = { fait: true, score: score, total: total, date: new Date().toISOString() };
+    etat.jours[d] = etat.jours[d] || [];
+    if (etat.jours[d].indexOf(cle(u, i)) === -1) etat.jours[d].push(cle(u, i));
+    setTimeout(function () { celebrer(score, total, avant < obj && faitesAujourdhui() >= obj); rendreNav(); }, 250);
     if (terminee(u)) delete etat.unites[u.id];
     sauver();
     document.querySelectorAll("#etapes a").forEach(function (l, k) { l.classList.toggle("fait", estFait(u, k)); });
@@ -793,8 +965,8 @@
     return '<div class="questions">' + qs.map(function (q, k) {
       return '<fieldset class="q" data-k="' + k + '">' +
         '<legend><span class="q-num">' + (k + 1) + ".</span> " + q.q + "</legend>" +
-        q.options.map(function (o, j) {
-          return '<label class="opt"><input type="radio" name="' + prefixe + "-q" + k + '" value="' + j + '"><span>' + o + "</span></label>";
+        melanger(q.options.map(function (o, j) { return { o: o, j: j }; })).map(function (x) {
+          return '<label class="opt"><input type="radio" name="' + prefixe + "-q" + k + '" value="' + x.j + '"><span>' + x.o + "</span></label>";
         }).join("") +
         '<p class="retour" hidden></p></fieldset>';
     }).join("") +
@@ -1239,7 +1411,7 @@
     document.title = "Règles de français";
     var nbLues = R.filter(function (r) { return etat.reglesLues[r.id]; }).length;
     app.innerHTML =
-      '<header class="page-tete"><p class="label">Le mémento des</p><h1 class="display">Règles</h1>' +
+      '<header class="page-tete"><h1 class="display">Le mémento des règles</h1>' +
         '<p class="lead">Un mémento à lire à ton rythme : grammaire, conjugaison, orthographe, vocabulaire et ponctuation. ' +
         nbLues + " règle" + (nbLues > 1 ? "s lues" : " lue") + " sur " + R.length + ".</p></header>" +
       '<div class="recherche"><label for="q" class="sr-only">Rechercher une règle</label>' +
@@ -1324,26 +1496,178 @@
   }
 
   /* =================================================================
+     Application installée et rappels (notifications)
+     ================================================================= */
+
+  var promptInstall = null;
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); promptInstall = e; });
+
+  function estIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
+  function estInstallee() { return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true; }
+  function pushPossible() { return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+
+  function enregistrerSW() {
+    if (!("serviceWorker" in navigator)) return;
+    if (location.protocol !== "https:" && location.hostname !== "localhost") return;
+    navigator.serviceWorker.register("sw.js").catch(function () { /* hors ligne indisponible */ });
+  }
+
+  function cleVapid(b64) {
+    var pad = "=".repeat((4 - b64.length % 4) % 4);
+    var raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  function enregistrerAbonnement(abo, heure, actif) {
+    var json = abo.toJSON ? abo.toJSON() : abo;
+    return sb.from("rappels").upsert({
+      endpoint: json.endpoint, user_id: utilisateur.id, abonnement: json,
+      heure: heure, fuseau: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris",
+      actif: actif, maj: new Date().toISOString()
+    }, { onConflict: "endpoint" });
+  }
+
+  function activerRappels(heure) {
+    if (!C.vapidPublicKey) return Promise.reject(new Error("La clé de notification (vapidPublicKey) manque dans config.js."));
+    return Notification.requestPermission().then(function (perm) {
+      if (perm !== "granted") throw new Error("Les notifications sont refusées. Autorise-les dans les réglages du téléphone (Réglages › Notifications › " + (C.nomApp || "Mon français") + ").");
+      return navigator.serviceWorker.ready;
+    }).then(function (reg) {
+      return reg.pushManager.getSubscription().then(function (abo) {
+        return abo || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: cleVapid(C.vapidPublicKey) });
+      });
+    }).then(function (abo) {
+      return enregistrerAbonnement(abo, heure, true);
+    }).then(function (res) {
+      if (res && res.error) throw new Error("Enregistrement impossible : " + res.error.message + ". As-tu exécuté supabase-rappels.sql ?");
+      etat.reglages.rappel = { actif: true, heure: heure };
+      sauver();
+    });
+  }
+
+  function desactiverRappels() {
+    return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (abo) {
+      etat.reglages.rappel = { actif: false, heure: (etat.reglages.rappel || {}).heure || "19:00" };
+      sauver();
+      if (!abo) return;
+      var endpoint = abo.endpoint;
+      return abo.unsubscribe().then(function () { return sb.from("rappels").update({ actif: false }).eq("endpoint", endpoint); });
+    });
+  }
+
+  function notificationTest() {
+    return navigator.serviceWorker.ready.then(function (reg) {
+      return reg.showNotification("Summer t’attend 🐾", {
+        body: "C’est l’heure de ton français ! Une activité de dix minutes suffit pour garder ta série.",
+        icon: "icones/icone-192.png", badge: "icones/badge-96.png", data: { url: "./" }
+      });
+    });
+  }
+
+  /* =================================================================
      Profil
      ================================================================= */
 
   function afficherProfil() {
     document.title = "Mon profil";
+    var rap = etat.reglages.rappel || { actif: false, heure: "19:00" };
+    var installee = estInstallee();
+
+    var blocRappels;
+    if (modeLocal) {
+      blocRappels = '<p class="alerte">Les rappels demandent un compte : configure d’abord Supabase.</p>';
+    } else if (estIOS() && !installee) {
+      blocRappels = '<p>Sur iPhone, les rappels ne fonctionnent qu’une fois l’application ajoutée à l’écran d’accueil (voir ci-dessous). Ouvre-la ensuite depuis son icône et reviens sur cette page.</p>';
+    } else if (!pushPossible()) {
+      blocRappels = '<p class="alerte">Ce navigateur ne permet pas les notifications. Utilise Safari sur iPhone (application installée), ou Chrome, Edge ou Firefox.</p>';
+    } else {
+      blocRappels =
+        '<div class="reglage-ligne"><label for="r-heure">Heure du rappel</label><input id="r-heure" type="time" value="' + esc(rap.heure || "19:00") + '"></div>' +
+        '<p class="petit">Si l’objectif du jour n’est pas atteint à cette heure-là, tu reçois un petit rappel. Et si ta série est en danger, un dernier message arrive vers 21 h 30.</p>' +
+        '<div class="actions">' +
+          (rap.actif && Notification.permission === "granted"
+            ? '<button type="button" class="btn btn-principal" id="r-maj">Enregistrer l’heure</button><button type="button" class="btn" id="r-test">Tester une notification</button><button type="button" class="btn-lien" id="r-off">Couper les rappels</button>'
+            : '<button type="button" class="btn btn-principal" id="r-on">🔔 Activer les rappels</button>') +
+        "</div>" +
+        '<p class="petit" id="r-msg" aria-live="polite"></p>';
+    }
+
+    var blocInstall = installee
+      ? '<p>✓ Tu utilises l’application installée. Elle se met à jour toute seule.</p>'
+      : estIOS()
+        ? '<ol class="etapes-install"><li>Ouvre ce site dans <strong>Safari</strong>.</li><li>Touche le bouton <strong>Partager</strong> (le carré avec une flèche vers le haut).</li><li>Choisis <strong>Sur l’écran d’accueil</strong>, puis <strong>Ajouter</strong>.</li><li>Ouvre l’application depuis sa nouvelle icône.</li></ol>'
+        : '<p>Sur ordinateur, le site fonctionne tel quel. Sur téléphone Android, tu peux aussi l’installer comme une application.</p>' +
+          '<button type="button" class="btn" id="installer"' + (promptInstall ? "" : " hidden") + '>Installer l’application</button>';
+
     app.innerHTML =
-      '<header class="page-tete"><p class="label">Mon</p><h1 class="display">Profil</h1>' +
+      '<header class="page-tete profil-tete">' + ILL.bao("content", "profil-bao") +
+        '<div><h1 class="display">' + esc(profil.prenom || "Mon profil") + "</h1>" +
         (modeLocal
-          ? '<p class="alerte">Mode local : la progression est enregistrée dans ce navigateur uniquement. Pour la synchroniser entre appareils, configure Supabase (voir le fichier README).</p>'
+          ? '<p class="alerte">Mode local : la progression est enregistrée dans ce navigateur uniquement. Pour la synchroniser, configure Supabase (voir le README).</p>'
           : '<p class="lead">Connectée avec ' + esc(utilisateur.email) + ".</p>") +
+        '<p class="profil-serie">' + FLAMME + " " + pluriel(serie(), "jour") + " de suite, record : " + pluriel(meilleureSerie(), "jour") + "</p></div>" +
       "</header>" +
-      '<form class="profil-form" id="form-profil">' +
-        '<div class="champ"><label for="p-prenom">Prénom</label><input id="p-prenom" autocomplete="given-name" value="' + esc(profil.prenom) + '"></div>' +
-        '<button class="btn" type="submit">Enregistrer le prénom</button><span class="petit" id="p-msg" aria-live="polite"></span>' +
-      "</form>" +
-      '<p><a class="lien-fort" href="#/progression">Voir ma progression et mon niveau estimé</a></p>' +
+
+      '<section class="panneau"><h2 class="petit-titre">🎯 Objectif quotidien</h2>' +
+        '<p class="petit">Combien d’activités veux-tu faire chaque jour ? Mieux vaut un petit objectif tenu tous les jours qu’un grand objectif abandonné.</p>' +
+        '<div class="niv-choix" role="group" aria-label="Objectif quotidien">' +
+          [1, 2, 3, 4].map(function (o) {
+            return '<button type="button" data-obj="' + o + '" aria-pressed="' + (objectif() === o) + '">' + pluriel(o, "activité") + "</button>";
+          }).join("") +
+        "</div>" +
+      "</section>" +
+
+      '<section class="panneau"><h2 class="petit-titre">🔔 Rappels quotidiens</h2>' + blocRappels + "</section>" +
+
+      '<section class="panneau"><h2 class="petit-titre">📱 L’application sur le téléphone</h2>' + blocInstall + "</section>" +
+
+      '<section class="panneau"><h2 class="petit-titre">Prénom</h2>' +
+        '<form class="profil-form" id="form-profil">' +
+          '<div class="champ"><label for="p-prenom">Prénom affiché</label><input id="p-prenom" autocomplete="given-name" value="' + esc(profil.prenom) + '"></div>' +
+          '<button class="btn" type="submit">Enregistrer le prénom</button><span class="petit" id="p-msg" aria-live="polite"></span>' +
+        "</form>" +
+      "</section>" +
+
       '<div class="actions profil-actions">' +
         (modeLocal ? "" : '<button type="button" class="btn" id="deconnexion">Se déconnecter</button>') +
         '<button type="button" class="btn-lien" id="effacer">Effacer toute ma progression</button>' +
       "</div>";
+
+    app.querySelectorAll("[data-obj]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        etat.reglages.objectif = parseInt(b.dataset.obj, 10);
+        app.querySelectorAll("[data-obj]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+        sauver(); majBadge();
+      });
+    });
+
+    var msg = document.getElementById("r-msg");
+    function dire(t) { if (msg) msg.textContent = t; }
+    function heure() { return document.getElementById("r-heure").value || "19:00"; }
+    var bOn = document.getElementById("r-on");
+    if (bOn) bOn.addEventListener("click", function () {
+      bOn.disabled = true; dire("Activation…");
+      activerRappels(heure()).then(function () { afficherProfil(); toast("<strong>Rappels activés !</strong> À demain, " + (profil.prenom ? esc(profil.prenom) : "") + " 🐾", "content"); },
+        function (e) { bOn.disabled = false; dire(e.message); });
+    });
+    var bMaj = document.getElementById("r-maj");
+    if (bMaj) bMaj.addEventListener("click", function () {
+      dire("Enregistrement…");
+      activerRappels(heure()).then(function () { dire("Heure enregistrée : " + heure() + "."); }, function (e) { dire(e.message); });
+    });
+    var bTest = document.getElementById("r-test");
+    if (bTest) bTest.addEventListener("click", function () { notificationTest().then(function () { dire("Notification envoyée."); }, function (e) { dire(e.message); }); });
+    var bOff = document.getElementById("r-off");
+    if (bOff) bOff.addEventListener("click", function () { desactiverRappels().then(afficherProfil); });
+
+    var bInst = document.getElementById("installer");
+    if (bInst) bInst.addEventListener("click", function () {
+      if (!promptInstall) return;
+      promptInstall.prompt();
+      promptInstall.userChoice.then(function () { promptInstall = null; afficherProfil(); });
+    });
 
     document.getElementById("form-profil").addEventListener("submit", function (e) {
       e.preventDefault();
@@ -1361,8 +1685,9 @@
     });
 
     document.getElementById("effacer").addEventListener("click", function () {
-      if (!confirm("Effacer toutes tes réponses, tes textes et tes règles lues ? Cette action est définitive.")) return;
-      etat = vide(); sauver(); afficherProfil();
+      if (!confirm("Effacer toutes tes réponses, tes textes, ta série et tes règles lues ? Cette action est définitive.")) return;
+      var reglages = etat.reglages;
+      etat = vide(); etat.reglages = reglages; sauver(); afficherProfil();
     });
     window.scrollTo(0, 0);
   }
@@ -1382,5 +1707,6 @@
     if (sale) { envoyer(); e.preventDefault(); e.returnValue = ""; }
   });
 
+  enregistrerSW();
   demarrer();
 })();

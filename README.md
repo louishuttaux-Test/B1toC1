@@ -1,50 +1,73 @@
-# Mon parcours de français (B1 → C1)
+# Mon français : parcours B1 → C1
 
-Site d'apprentissage du français : 30 unités sur trois paliers et huit thèmes (ceux de TV5 Monde, plus les études), un mémento de règles,
-et un compte personnel qui synchronise la progression entre appareils.
+Site d'apprentissage du français, utilisable sur ordinateur et installable comme application sur iPhone.
+30 unités complètes (174 activités), un mémento de 29 règles, une série de jours façon Duolingo,
+un objectif quotidien et des rappels par notification. La mascotte est Summer, notre chienne. 🐾
 
 ## Fichiers
 
 | Fichier | Rôle |
 |---|---|
 | `index.html` | la page |
-| `style.css` | l'apparence |
-| `app.js` | le fonctionnement : comptes, navigation, exercices, sauvegarde |
-| `contenu.js` | les unités du parcours (le fichier à enrichir) |
+| `style.css` | l'apparence (couleurs, animations, version téléphone) |
+| `app.js` | le fonctionnement : comptes, exercices, série, rappels |
+| `contenu.js` | les 30 unités |
 | `regles.js` | le mémento de règles |
-| `config.js` | les deux clés Supabase |
-| `supabase.sql` | le script de création de la base, à exécuter une fois |
+| `illustrations.js` | les dessins (thèmes et Summer) |
+| `config.js` | les clés Supabase et la clé publique des notifications |
+| `manifest.webmanifest`, `sw.js`, `icones/` | ce qui transforme le site en application |
+| `supabase.sql` | création de la table de progression (déjà fait) |
+| `supabase-rappels.sql` | création des rappels (à faire une fois) |
+| `supabase/functions/rappel/index.ts` | la fonction qui envoie les notifications |
 
-## 1. Configurer Supabase (une dizaine de minutes, une seule fois)
+Tout se dépose à la racine du dépôt GitHub, dossiers `icones` et `supabase` compris.
 
-1. Crée un compte gratuit sur supabase.com, puis un nouveau projet (région Europe, par exemple Paris ou Francfort). Note le mot de passe de la base, même s'il ne servira pas ici.
-2. Dans le projet : **SQL Editor › New query**. Colle le contenu de `supabase.sql`, puis clique sur **Run**. Cela crée la table de progression et ses règles de sécurité.
-3. **Project Settings › API** : copie la **Project URL** et la clé **anon public**, puis colle-les dans `config.js`.
-4. **Authentication › URL Configuration** : dans **Site URL**, mets l'adresse du site GitHub Pages (par exemple `https://ton-pseudo.github.io/parcours-fle/`). Ajoute-la aussi dans **Redirect URLs**. C'est là que mèneront les liens de confirmation et de réinitialisation du mot de passe.
-5. Facultatif, pour aller plus vite : **Authentication › Sign In / Providers › Email**, désactive **Confirm email**. Le compte sera alors utilisable dès sa création, sans clic dans un courriel.
+## 1. Mettre à jour le site
 
-Tant que `config.js` est vide, le site fonctionne en mode local (sans compte), ce qui permet de tester.
+Remplace tous les fichiers du dépôt par ceux de l'archive, puis attends une ou deux minutes.
+La progression déjà enregistrée est conservée.
 
-## 2. Mettre en ligne avec GitHub Pages
+À chaque future mise à jour, change le numéro `VERSION` en haut de `sw.js` (par exemple `v3` → `v4`) :
+c'est ce qui force les téléphones à charger la nouvelle version.
 
-1. Dépose tous les fichiers à la racine du dépôt.
-2. **Settings › Pages** : Source « Deploy from a branch », branche `main`, dossier `/ (root)`.
-3. Le site est en ligne après une ou deux minutes.
+## 2. Installer l'application sur l'iPhone
+
+1. Ouvre l'adresse du site dans **Safari** (pas Chrome).
+2. Bouton **Partager** (carré avec une flèche) › **Sur l'écran d'accueil** › **Ajouter**.
+3. Ouvre l'application depuis l'icône de Summer et connecte-toi.
+
+Le nom sous l'icône se change dans `manifest.webmanifest` (`name`, `short_name`) et dans `index.html`
+(`apple-mobile-web-app-title`).
+
+## 3. Activer les rappels (une quinzaine de minutes, une seule fois)
+
+Les notifications partent d'une petite fonction hébergée chez Supabase, appelée toutes les 15 minutes.
+Elle envoie un rappel à l'heure choisie si l'objectif du jour n'est pas atteint, et un dernier message
+vers 21 h 30 si une série d'au moins deux jours risque de s'arrêter.
+
+**a. Les secrets.** Dans Supabase : **Edge Functions › Secrets** (ou Project Settings › Edge Functions).
+Ajoute trois secrets ; les valeurs sont dans le fichier `cles-notifications.txt`, fourni à part :
+
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY` (à ne jamais mettre sur GitHub)
+- `VAPID_SUBJECT` : `mailto:` suivi de ton adresse, par exemple `mailto:louis@exemple.fr`
+
+**b. La fonction.** **Edge Functions › Deploy a new function › Via Editor**. Nom : `rappel` (exactement).
+Remplace le code d'exemple par tout le contenu de `supabase/functions/rappel/index.ts`, puis **Deploy**.
+
+**c. La table et le réveil.** **SQL Editor › New query**, colle `supabase-rappels.sql`, puis **Run**.
+Si un message signale que `pg_cron` ou `pg_net` n'est pas disponible, active-les dans
+**Database › Extensions** (ou **Integrations › Cron**), puis relance le script.
+
+**d. Sur l'iPhone.** Dans l'application installée : **Profil › Activer les rappels**, accepte les
+notifications, choisis l'heure, puis **Tester une notification**.
+
+Pour vérifier que le réveil tourne : **Edge Functions › rappel › Logs** affiche un appel toutes les 15 minutes.
 
 ## Fonctionnement
 
-- **Compte** : création avec prénom, adresse et mot de passe ; réinitialisation par courriel. Chaque compte ne peut lire et modifier que sa propre progression (règles de sécurité de la base).
-- **Synchronisation** : chaque réponse est enregistrée en ligne quelques instants après. L'indicateur en haut à droite affiche « Synchronisé ». Hors connexion, la progression est gardée sur l'appareil et renvoyée dès que possible.
-- **Progression existante** : à la première connexion, ce qui avait été fait sans compte sur cet appareil est récupéré automatiquement.
-- **Navigation libre** : toutes les unités disponibles sont accessibles dans n'importe quel ordre. « Passer » retire une unité des suggestions sans la bloquer.
-- **Expression orale** : l'activité « Parler » enregistre au micro (le navigateur demande l'autorisation la première fois). Elle ne fonctionne que sur la version en ligne du site (adresse en https), pas en ouvrant le fichier directement. Les enregistrements restent sur l'appareil et ne sont pas envoyés en ligne. Sur Chrome, Edge et Safari, une transcription automatique montre ce que le navigateur a compris.
-- **Liens avec la Chine** : les unités marquées 中 relient le français à la Chine ; un filtre permet de les retrouver.
-- **Règles** : 29 règles en cinq catégories, avec recherche (sans accents), règle du jour et suivi des règles lues. Les activités renvoient vers les règles utiles.
-
-## Ajouter une unité
-
-Dans `contenu.js`, remplace la ligne courte d'une unité « À venir » par un bloc complet sur le modèle des unités 1, 2 ou 11. Le champ `regles: ["id"]` d'une activité ajoute un lien vers une règle.
-
-## Ajouter une règle
-
-Dans `regles.js`, ajoute un bloc sur le modèle des autres. L'`id` doit être unique et sans espace.
+- **Série** : un jour compte dès qu'une activité est terminée. La série affichée en haut est le nombre de jours consécutifs.
+- **Objectif du jour** : réglable de 1 à 4 activités dans le profil. Une célébration s'affiche quand il est atteint.
+- **Hors connexion** : l'application garde une copie des fichiers ; la progression est renvoyée dès que le réseau revient.
+- **QCM** : l'ordre des réponses est mélangé à chaque affichage.
+- **Comptes** : chaque compte ne peut lire et modifier que sa propre progression et ses propres rappels.
