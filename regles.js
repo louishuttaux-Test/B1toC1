@@ -130,6 +130,48 @@ window.REGLES = [
   },
 
   {
+    id: "expressions-de-quantite", cat: "grammaire", niveau: "B1",
+    titre: "Beaucoup de, un peu de, la plupart des : exprimer une quantité",
+    resume: "Après une expression de quantité, on emploie de (d’), sauf avec la plupart, bien et la majorité.",
+    corps: `
+      <table class="fiche-table">
+        <thead><tr><th scope="col">Quantité</th><th scope="col">Expressions</th><th scope="col">Exemple</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">imprécise</th><td>beaucoup de, peu de, un peu de, assez de, trop de, plein de (familier)</td><td>Il y a beaucoup <strong>de</strong> monde.</td></tr>
+          <tr><th scope="row">précise</th><td>un kilo de, deux cents grammes de, un litre de, une bouteille de, une tranche de, un morceau de, une pincée de, une gousse d’ail</td><td>Une tranche <strong>de</strong> jambon, une bouteille <strong>d’</strong>eau.</td></tr>
+          <tr><th scope="row">exceptions</th><td>la plupart <strong>des</strong>, bien <strong>des</strong>, la majorité <strong>des</strong> (+ nom pluriel)</td><td>La plupart <strong>des</strong> invités sont arrivés.</td></tr>
+        </tbody>
+      </table>
+      <h3>Un peu de ou peu de ?</h3>
+      <p><em>Un peu de</em> = une petite quantité, c’est positif : <em>Tu veux un peu de thé ?</em> <em>Peu de</em> = presque rien, c’est négatif : <em>Il y avait peu de monde.</em></p>
+      <p class="piege"><strong>Piège.</strong> On dit <em>beaucoup <strong>de</strong> gens</em>, jamais <em>beaucoup des gens</em>. Mais si le nom est précisé, l’article revient : <em>beaucoup <strong>des</strong> plats que ma mère prépare</em> (= de + les plats que…).</p>`,
+    voir: ["articles-partitifs"]
+  },
+
+  {
+    id: "negation", cat: "grammaire", niveau: "B1",
+    titre: "Ne… plus, ne… jamais, ne… pas encore : les négations",
+    resume: "Dire qu’une habitude a changé, qu’une chose n’est jamais ou pas encore arrivée.",
+    corps: `
+      <table class="fiche-table">
+        <thead><tr><th scope="col">Affirmation</th><th scope="col">Négation</th><th scope="col">Exemple</th></tr></thead>
+        <tbody>
+          <tr><td>encore, toujours (= continuer)</td><td><strong>ne… plus</strong></td><td>Je dîne encore à six heures ? — Non, je <strong>ne</strong> dîne <strong>plus</strong> à six heures.</td></tr>
+          <tr><td>déjà</td><td><strong>ne… pas encore</strong></td><td>Tu as déjà ta carte ? — Non, je <strong>ne</strong> l’ai <strong>pas encore</strong>.</td></tr>
+          <tr><td>souvent, toujours (= chaque fois), parfois</td><td><strong>ne… jamais</strong></td><td>Je <strong>ne</strong> fais <strong>jamais</strong> la bise au travail.</td></tr>
+          <tr><td>quelque chose</td><td><strong>ne… rien</strong></td><td>Je <strong>ne</strong> comprenais <strong>rien</strong>.</td></tr>
+          <tr><td>quelqu’un</td><td><strong>ne… personne</strong></td><td>Je <strong>ne</strong> connaissais <strong>personne</strong>.</td></tr>
+        </tbody>
+      </table>
+      <h3>Place avec un temps composé</h3>
+      <p><em>Ne… plus, ne… jamais, ne… pas encore, ne… rien</em> entourent l’auxiliaire : <em>Je <strong>n’</strong>ai <strong>jamais</strong> goûté ce plat.</em> <em>Personne</em> se place après le participe : <em>Je <strong>n’</strong>ai vu <strong>personne</strong>.</em></p>
+      <h3>Avec en et y</h3>
+      <p>Le pronom reste collé au verbe, à l’intérieur de la négation : <em>Je <strong>n’y</strong> suis <strong>pas encore</strong> habituée. Il <strong>n’en</strong> mange <strong>plus</strong>.</em></p>
+      <p class="piege"><strong>Piège.</strong> À l’oral familier, le <em>ne</em> disparaît souvent (<em>j’ai pas encore l’habitude</em>). À l’écrit, il est obligatoire.</p>`,
+    voir: ["pronoms-en-y", "registres-de-langue"]
+  },
+
+  {
     id: "comparatif-superlatif", cat: "grammaire", niveau: "B1",
     titre: "Comparatif et superlatif",
     resume: "Plus… que, aussi… que, le plus… de : comparer des personnes, des lieux, des choses.",
@@ -364,6 +406,30 @@ window.REGLES = [
   },
 
   {
+    id: "imperatif", cat: "conjugaison", niveau: "B1",
+    titre: "L’impératif, et l’infinitif des consignes",
+    resume: "Donner une instruction ou un conseil : coupe, coupez… ou couper, dans une recette.",
+    corps: `
+      <p>L’impératif a trois personnes, sans sujet : <em>tu, nous, vous</em>. On part du présent.</p>
+      <p class="ex">tu prends → <strong>prends</strong> ; nous prenons → <strong>prenons</strong> ; vous prenez → <strong>prenez</strong></p>
+      <h3>Les verbes en -er</h3>
+      <p>À la 2<sup>e</sup> personne du singulier, le <em>s</em> disparaît : <em>tu coupes → <strong>coupe</strong> ; tu vas → <strong>va</strong></em>.</p>
+      <h3>Quatre irréguliers</h3>
+      <table class="fiche-table">
+        <tbody>
+          <tr><th scope="row">être</th><td>sois, soyons, soyez</td></tr>
+          <tr><th scope="row">avoir</th><td>aie, ayons, ayez</td></tr>
+          <tr><th scope="row">savoir</th><td>sache, sachons, sachez</td></tr>
+          <tr><th scope="row">vouloir</th><td>veuillez (surtout dans les formules polies : <em>Veuillez agréer…</em>)</td></tr>
+        </tbody>
+      </table>
+      <h3>L’infinitif des consignes</h3>
+      <p>Dans une recette, un mode d’emploi ou un règlement, on utilise souvent l’<strong>infinitif</strong> à la place de l’impératif : <em>Éplucher les carottes. Faire cuire dix minutes. Ne pas fumer.</em> À la négation, <em>ne pas</em> se place devant l’infinitif.</p>
+      <p class="piege"><strong>Piège.</strong> Négation à l’impératif : <em>Ne coupe <strong>pas</strong> trop fin.</em> Pour les pronoms avec l’impératif (<em>vas-y, prends-en</em>), voir la fiche sur en et y.</p>`,
+    voir: ["pronoms-en-y", "donner-un-conseil"]
+  },
+
+  {
     id: "conditionnel", cat: "conjugaison", niveau: "B2",
     titre: "Le conditionnel présent et passé",
     resume: "Politesse, conseil, hypothèse, information non confirmée.",
@@ -538,6 +604,49 @@ window.REGLES = [
         <li><em>avoir un trou de mémoire</em>, <em>ça me dit quelque chose</em>, <em>ça me revient</em> : expressions courantes à l’oral.</li>
       </ul>`,
     voir: ["pronoms-en-y", "expressions-idiomatiques"]
+  },
+
+  {
+    id: "courriel-formel", cat: "vocabulaire", niveau: "B1",
+    titre: "Écrire un courriel formel",
+    resume: "Objet, formule d’appel, demande polie, formule finale : les étapes d’un courriel à un enseignant ou à une administration.",
+    corps: `
+      <table class="fiche-table">
+        <thead><tr><th scope="col">Étape</th><th scope="col">Formules</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Objet</th><td>court et précis : <em>Absence au TD du 8 octobre (groupe 3)</em></td></tr>
+          <tr><th scope="row">Appel</th><td><em>Madame, Monsieur,</em> (le plus sûr) ; <em>Madame la Professeure, Monsieur le Directeur,</em> (plus formel). Jamais <em>Bonjour Madame Lefèvre</em> dans un premier courriel formel.</td></tr>
+          <tr><th scope="row">Présentation</th><td><em>Je suis étudiante en première année de licence de…, inscrite dans votre groupe de TD du mardi.</em></td></tr>
+          <tr><th scope="row">Demande</th><td>au conditionnel : <em>Pourriez-vous m’indiquer… ? Je souhaiterais savoir si… Serait-il possible de… ?</em></td></tr>
+          <tr><th scope="row">Remerciement</th><td><em>Je vous remercie par avance de votre réponse.</em></td></tr>
+          <tr><th scope="row">Formule finale</th><td><em>Bien cordialement</em> (courant) ; <em>Veuillez agréer, Madame, l’expression de mes salutations respectueuses.</em> (très formel)</td></tr>
+        </tbody>
+      </table>
+      <p>Du début à la fin : le <strong>vouvoiement</strong>, des phrases complètes, pas d’abréviations (<em>stp, dsl, pb</em>) ni d’émoticônes.</p>
+      <p class="piege"><strong>Piège.</strong> Dans <em>Madame, Monsieur,</em> la majuscule est obligatoire, et on ne met pas le nom de famille après <em>Madame</em> dans la formule d’appel.</p>`,
+    voir: ["conditionnel", "registres-de-langue", "majuscules"]
+  },
+
+  {
+    id: "donner-un-conseil", cat: "vocabulaire", niveau: "B1",
+    titre: "Donner un conseil",
+    resume: "Je te conseille de, il vaut mieux, n’hésite pas à, évite de : conseiller sans répéter « il faut ».",
+    corps: `
+      <table class="fiche-table">
+        <thead><tr><th scope="col">Expression</th><th scope="col">Construction</th><th scope="col">Exemple</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">je te conseille</th><td>de + infinitif</td><td>Je te conseille <strong>de</strong> prendre une colocation.</td></tr>
+          <tr><th scope="row">il vaut mieux</th><td>+ infinitif, sans préposition</td><td>Il vaut mieux réserver à l’avance.</td></tr>
+          <tr><th scope="row">n’hésite pas</th><td>à + infinitif</td><td>N’hésite pas <strong>à</strong> poser des questions.</td></tr>
+          <tr><th scope="row">pense</th><td>à + infinitif</td><td>Pense <strong>à</strong> prendre ta carte étudiante.</td></tr>
+          <tr><th scope="row">évite</th><td>de + infinitif</td><td>Évite <strong>de</strong> faire tes courses le dimanche.</td></tr>
+          <tr><th scope="row">tu devrais</th><td>+ infinitif (conditionnel : conseil doux)</td><td>Tu devrais t’inscrire à un club.</td></tr>
+          <tr><th scope="row">si j’étais toi</th><td>+ conditionnel</td><td>Si j’étais toi, je partirais plus tôt.</td></tr>
+        </tbody>
+      </table>
+      <p>L’impératif est le conseil le plus direct : <em>Profite des marchés !</em> Pour adoucir, ajoute <em>surtout</em>, <em>vraiment</em> ou un argument : <em>Profite des marchés : c’est là qu’on rencontre les gens.</em></p>
+      <p class="piege"><strong>Piège.</strong> On dit <em>il vaut mieux partir</em>, pas <em>il vaut mieux de partir</em>.</p>`,
+    voir: ["imperatif", "conditionnel", "donner-son-avis"]
   },
 
   {

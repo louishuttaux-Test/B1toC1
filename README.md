@@ -1,7 +1,7 @@
 # Mon français : parcours B1 → C1
 
 Site d'apprentissage du français, utilisable sur ordinateur et installable comme application sur iPhone.
-30 unités (201 exercices, dont l’unité 1 entièrement enrichie), un mémento de 32 règles, une série de jours façon Duolingo,
+30 unités (279 exercices, dont les unités 1 à 4 entièrement enrichies), un mémento de 37 règles, une série de jours façon Duolingo,
 un objectif quotidien et des rappels par notification. La mascotte est Summer, notre chienne. 🐾
 
 ## Fichiers

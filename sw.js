@@ -3,7 +3,7 @@
   (lancement hors connexion, notifications de rappel).
   Après une mise à jour du site, change le numéro de VERSION.
 */
-var VERSION = "mon-francais-v5";
+var VERSION = "mon-francais-v6";
 var NB_UNITES = 30; // unites/u01.js … u30.js
 var FICHIERS = ["./", "index.html", "style.css", "app.js", "contenu.js", "regles.js", "illustrations.js", "config.js",
   "manifest.webmanifest", "icones/icone-192.png", "icones/badge-96.png"];
